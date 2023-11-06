@@ -1,0 +1,2 @@
+# This directory should contain the weights of the linear projection from ImageBind to LLaMA and the weights for embeddings of the begin/end of the vector representation of the modalities 
+you can download weights [here](https://disk.yandex.ru/d/lVlYwmyqPNCs0g)
