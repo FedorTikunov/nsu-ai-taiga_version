@@ -16,9 +16,9 @@ def main():
     parser.add_argument('-m', '--model', dest='model_name', type=str, required=True,
                         help='The model name.')
     parser.add_argument('--dtype', dest='torch_dtype', type=str, required=False, default='fp16',
-                        help='The model name.')
+                        help='The model data type.')
     parser.add_argument('--device', dest='torch_device', type=str, required=False, default=None,
-                        help='The model name.', choices=['cuda', 'cpu', 'gpu'])
+                        help='The model device.', choices=['cuda', 'cpu', 'gpu'])
     args = parser.parse_args()
 
     if args.torch_device is None:
