@@ -6,18 +6,21 @@ import gc
 import logging
 import math
 import os
+import pickle
 import random
 import sys
 from typing import List, Tuple
 
 import numpy as np
+from sklearn.decomposition import PCA
+from sklearn.preprocessing import StandardScaler
+from sklearn.pipeline import Pipeline
 import torch
 from tqdm import trange
 
 
 vectorization_logger = logging.getLogger(__name__)
 RANDOM_SEED: int = 42
-EPS: float = 1e-9
 
 
 def load_csv(fname: str) -> List[Tuple[str, int, str]]:
@@ -88,7 +91,7 @@ def main():
         vectorization_logger.error(err_msg)
         raise IOError(err_msg)
 
-    output_data_dir = os.path.normpath(args.input_wiki_dir)
+    output_data_dir = os.path.normpath(args.output_csv)
     if not os.path.isdir(output_data_dir):
         err_msg = f'The directory "{output_data_dir}" does not exist!'
         vectorization_logger.error(err_msg)
@@ -119,17 +122,22 @@ def main():
     os.chdir(current_workdir)
     vectorization_logger.info(f'Restored working directory: {os.getcwd()}')
 
-    csv_names = list(map(
-        lambda it2: os.path.join(input_data_dir, it2),
-        filter(
-            lambda it1: it1.lower().endswith('.csv'),
-            os.listdir(input_data_dir)
-        )
-    ))
+    csv_names = sorted(
+        list(map(
+            lambda it2: os.path.join(input_data_dir, it2),
+            filter(
+                lambda it1: it1.lower().endswith('.csv'),
+                os.listdir(input_data_dir)
+            )
+        )),
+        key=lambda it3: (-math.ceil(os.path.getsize(it3) / 1024), it3)
+    )
     if len(csv_names) == 0:
         err_msg = f'The directory "{input_data_dir}" is empty!'
         vectorization_logger.error(err_msg)
         raise IOError(err_msg)
+
+    pca = None
 
     for csv_counter, csv_fname in enumerate(csv_names):
         vectorization_logger.info(f'Processing of the {csv_counter + 1} file of {len(csv_names)} has begun.')
@@ -147,23 +155,32 @@ def main():
             src_tokens = model.process_text(texts[batch_start:batch_end])
             with torch.no_grad():
                 text_features = model.extract_text_features(src_tokens)
-            text_features = text_features.cpu().type(torch.FloatTensor).numpy().astype(np.float64)
-            text_feature_norms = np.linalg.norm(text_features, axis=-1, keepdims=True)
-            text_vectors.append(
-                np.asarray(
-                    text_features / (text_feature_norms + EPS),
-                    dtype=np.float32
-                )
-            )
+            text_vectors.append(text_features.cpu().type(torch.FloatTensor).numpy())
             del text_features, src_tokens
         text_vectors = np.vstack(text_vectors)
-        info_msg = f'Processing of the {csv_counter + 1} file of {len(csv_names)}: ' \
-                   f'{text_vectors.shape[0]} samples have been vectorized.'
+        info_msg = (f'Processing of the {csv_counter + 1} file of {len(csv_names)}: '
+                    f'{text_vectors.shape[0]} samples have been vectorized. '
+                    f'The vector size is {text_vectors.shape[1]}.')
         vectorization_logger.info(info_msg)
+        if pca is None:
+            pca = Pipeline(steps=[
+                ('mean', StandardScaler(with_mean=True, with_std=False)),
+                ('pca', PCA(n_components=300, random_state=RANDOM_SEED)),
+                ('std', StandardScaler(with_mean=True, with_std=True))
+            ])
+            pca.fit(text_vectors)
+            pca_fname = os.path.join(output_data_dir, 'wiki_onepeace_pca.pkl')
+            with open(pca_fname, 'wb') as fp:
+                pickle.dump(pca, fp)
+            info_msg = (f'PCA has been trained for dimensionality reduction, '
+                        f'and it is saved into the file "{pca_fname}".')
+            vectorization_logger.info(info_msg)
+        text_vectors = pca.transform(text_vectors)
+        vectorization_logger.info('The text vector size has been reduced with PCA.')
         binary_fname = os.path.join(output_data_dir, os.path.basename(csv_fname)[:-4] + '.npy')
         np.save(file=binary_fname, arr=text_vectors, allow_pickle=False)
         info_msg = f'Processing of the {csv_counter + 1} file of {len(csv_names)}: ' \
-                   f'{len(text_vectors.shape[0])} samples have been saved into "{binary_fname}".'
+                   f'{text_vectors.shape[0]} samples have been saved into "{binary_fname}".'
         vectorization_logger.info(info_msg)
         del text_vectors, texts
         gc.collect()
