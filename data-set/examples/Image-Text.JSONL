@@ -1,25 +1,2 @@
-[
-    [{"type": "text", "content": "What is the name of the film directed by Steven Spielberg about Martians, starring Tom Cruise, that was rebooted in 2005?"}],
-    ["The film you're referring to is 'War of the Worlds'.", "'War of the Worlds'."],
-    [{"type": "text", "content": "Who directed the movie about Martians with Tom Cruise in the lead role?"}],
-    ["The film 'War of the Worlds' was directed by Steven Spielberg.", "Steven Spielberg."],
-    [{"type": "text", "content": "What is the main plot of the movie with Martians and Tom Cruise?"}],
-    ["'War of the Worlds' follows the story of an alien invasion, where Tom Cruise's character tries to protect his family from the extraterrestrial threat."],
-    [{"type": "text", "content": "When was the original version of this movie released?"}],
-    ["The original movie, based on H.G. Wells' novel, was released in 1953.", "1953."],
-    [{"type": "text", "content": "Does this look like the poster for this movie with Tom Cruise in the lead role?"}, {"type": "image", "content": "./images/war-of-the-worlds-poster.jpg"}],
-    ["Yes, this is a poster for the movie 'War of the Worlds', filmed in 2005.", "Yes."],
-    [{"type": "text", "content": "Is this the cover of the book this movie was based on?"}, {"type": "image", "content": "./images/random-war-book.jpg"}],
-    ["No, this is the cover of the book 'WAR' by Sebastian Junger.", "No."]
-]
-
-[
-    [{"type": "text", "content": "In which book by J.K. Rowling does the reader first encounter Hogwarts, the school of witchcraft and wizardry?"}],
-    ["The reader first encounters Hogwarts in the book 'Harry Potter and the Philosopher's Stone' (or 'Harry Potter and the Sorcerer's Stone' in the U.S.).", "'Harry Potter and the Philosopher's Stone'.", "'Harry Potter and the Sorcerer's Stone'."],
-    [{"type": "text", "content": "Is this Hogwarts Castle?"}, {"type": "image", "content": "./images/notr-dam.jpg"}],
-    ["No, this is Notre Dame Cathedral, which is located in the center of Paris, France.", "No."],
-    [{"type": "text", "content": "Is the Harry Potter book series mostly set in the same location as the castle in the picture?"}],
-    ["No, the Harry Potter book series mostly takes place in the UK, and the castle in the picture is located in France.", "No."],
-    [{"type": "text", "content": "Does the Harry Potter book series take place in the same country as this landmark?"}, {"type": "image", "content": "./images/Big-Ben.jpg"}],
-    ["Yes, this is Big Ben, which is located in London. London is the capital of England, and the Harry Potter series of books actually takes place there.", "Yes."]    
-]
+[[{"type": "text", "content": "What is the name of the film directed by Steven Spielberg about Martians, starring Tom Cruise, that was rebooted in 2005?"}],["The film you're referring to is 'War of the Worlds'.", "'War of the Worlds'."],[{"type": "text", "content": "Who directed the movie about Martians with Tom Cruise in the lead role?"}],["The film 'War of the Worlds' was directed by Steven Spielberg.", "Steven Spielberg."],[{"type": "text", "content": "What is the main plot of the movie with Martians and Tom Cruise?"}],["'War of the Worlds' follows the story of an alien invasion, where Tom Cruise's character tries to protect his family from the extraterrestrial threat."],[{"type": "text", "content": "When was the original version of this movie released?"}],["The original movie, based on H.G. Wells' novel, was released in 1953.", "1953."],[{"type": "text", "content": "Does this look like the poster for this movie with Tom Cruise in the lead role?"}, {"type": "image", "content": "./images/war-of-the-worlds-poster.jpg"}],["Yes, this is a poster for the movie 'War of the Worlds', filmed in 2005.", "Yes."],[{"type": "text", "content": "Is this the cover of the book this movie was based on?"}, {"type": "image", "content": "./images/random-war-book.jpg"}],["No, this is the cover of the book 'WAR' by Sebastian Junger.", "No."]]
+[[{"type": "text", "content": "In which book by J.K. Rowling does the reader first encounter Hogwarts, the school of witchcraft and wizardry?"}],["The reader first encounters Hogwarts in the book 'Harry Potter and the Philosopher's Stone' (or 'Harry Potter and the Sorcerer's Stone' in the U.S.).", "'Harry Potter and the Philosopher's Stone'.", "'Harry Potter and the Sorcerer's Stone'."],[{"type": "text", "content": "Is this Hogwarts Castle?"}, {"type": "image", "content": "./images/notr-dam.jpg"}],["No, this is Notre Dame Cathedral, which is located in the center of Paris, France.", "No."],[{"type": "text", "content": "Is the Harry Potter book series mostly set in the same location as the castle in the picture?"}],["No, the Harry Potter book series mostly takes place in the UK, and the castle in the picture is located in France.", "No."],[{"type": "text", "content": "Does the Harry Potter book series take place in the same country as this landmark?"}, {"type": "image", "content": "./images/Big-Ben.jpg"}],["Yes, this is Big Ben, which is located in London. London is the capital of England, and the Harry Potter series of books actually takes place there.", "Yes."]]
