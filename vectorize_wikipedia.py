@@ -72,7 +72,7 @@ def main():
 
     parser = ArgumentParser()
     parser.add_argument('-i', '--input', dest='input_wiki_dir', type=str, required=True,
-                        help='The input path to the directory with CSV files containing structured Wikipedia.')
+                        help='The input path to the directory with CSV files containing tokenized Wikipedia.')
     parser.add_argument('-o', '--output', dest='output_csv', type=str, required=True,
                         help='The output path to the directory into which vectorized data will be saved.')
     parser.add_argument('-p', '--one-peace', dest='one_peace_dir', type=str, required=True,

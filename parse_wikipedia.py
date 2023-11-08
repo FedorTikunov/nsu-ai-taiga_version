@@ -119,7 +119,7 @@ def main():
     parser.add_argument('-i', '--input', dest='input_wiki_dir', type=str, required=True,
                         help='The input path to Wikipedia parsed by WikiExtractor.')
     parser.add_argument('-o', '--output', dest='output_csv', type=str, required=True,
-                        help='The output name of the CSV file with structured Wikipedia content.')
+                        help='The output name of the CSV file with tokenized Wikipedia content.')
     args = parser.parse_args()
 
     input_wiki_dir = os.path.normpath(args.input_wiki_dir)
