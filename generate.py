@@ -9,6 +9,7 @@ from typing import Dict, List, Tuple
 
 from annoy import AnnoyIndex
 from sklearn.pipeline import Pipeline
+import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
 
@@ -17,6 +18,10 @@ conversation_logger = logging.getLogger(__name__)
 
 
 def setup_model_and_tokenizer() -> Tuple[MultimodalModel, AutoTokenizer]:
+    if not torch.cuda.is_available():
+        err_msg = 'CUDA is not available!'
+        conversation_logger.error(err_msg)
+        raise ValueError(err_msg)
     one_peace_dir = os.path.join(os.path.dirname(__file__), 'ONE-PEACE')
     if not os.path.isdir(one_peace_dir):
         err_msg = f'The directory "{one_peace_dir}" does not exist!'
