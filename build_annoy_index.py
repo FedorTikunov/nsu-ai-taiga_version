@@ -149,6 +149,7 @@ def main():
     feature_vector_size = None
     annoy_index = None
     text_collection = []
+    annoy_index_fname = os.path.join(annoy_index_dir, 'en_wiki_paragraphs.ann')
     for csv_fname, np_fname in tqdm(file_pairs):
         texts = load_csv(csv_fname)
         vectors, feature_vector_size = load_numpy_array(np_fname, feature_vector_size)
@@ -159,6 +160,7 @@ def main():
             raise ValueError(err_msg)
         if annoy_index is None:
             annoy_index = AnnoyIndex(feature_vector_size, 'angular')
+            annoy_index.on_disk_build(annoy_index_fname)
         for i in range(vectors.shape[0]):
             annoy_index.add_item(len(text_collection), vectors[i])
             text_collection.append(texts[i][2])
@@ -173,10 +175,8 @@ def main():
     gc.collect()
     indexing_logger.info(f'The text collection has been saved into the "{text_collection_fname}".')
 
-    annoy_index_fname = os.path.join(annoy_index_dir, 'en_wiki_paragraphs.ann')
     annoy_index.set_seed(RANDOM_SEED)
     annoy_index.build(args.annoy_trees, n_jobs=-1)
-    annoy_index.save(annoy_index_fname)
     indexing_logger.info(f'The Annoy index has been saved into the "{annoy_index_fname}".')
 
 
