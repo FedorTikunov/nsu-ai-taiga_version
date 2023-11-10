@@ -88,7 +88,7 @@ def generate_answer_based_on_prompt(prompt: str, model: AutoModelForCausalLM, to
     del tokenized_text
     batched_input_ids = torch.nn.utils.rnn.pad_sequence(
         input_ids,
-        batch_first=True, padding_value=tokenizer.pad_token_id
+        batch_first=True, padding_value=0  # <unk> idx
     ).to(DEVICE)
     batched_attention_mask = torch.nn.utils.rnn.pad_sequence(
         attention_mask,
@@ -126,7 +126,7 @@ def generate_logits_based_on_prompt(prompt: str, model: AutoModelForCausalLM, to
     del tokenized_text
     batched_input_ids = torch.nn.utils.rnn.pad_sequence(
         input_ids,
-        batch_first=True, padding_value=tokenizer.pad_token_id
+        batch_first=True, padding_value=0  # <unk> idx
     ).to(DEVICE)
     batched_attention_mask = torch.nn.utils.rnn.pad_sequence(
         attention_mask,
@@ -335,7 +335,10 @@ def setup_model_and_tokenizer() -> Tuple[MultimodalModel, AutoTokenizer]:
     conversation_logger.info(f'Current working directory: {current_workdir}')
     os.chdir(one_peace_dir)
     conversation_logger.info(f'New working directory: {os.getcwd()}')
-    onepeace_model = from_pretrained(one_peace_model_fname, device=DEVICE, dtype='fp16')
+    if DEVICE.type == "cpu":
+        onepeace_model = from_pretrained(one_peace_model_fname, device=DEVICE)
+    else:
+        onepeace_model = from_pretrained(one_peace_model_fname, device=DEVICE, dtype='fp16')
     conversation_logger.info(f'ONE-PEACE model is loaded from the "{one_peace_model_fname}".')
     os.chdir(current_workdir)
     conversation_logger.info(f'Restored working directory: {os.getcwd()}')
@@ -387,7 +390,11 @@ def setup_model_and_tokenizer() -> Tuple[MultimodalModel, AutoTokenizer]:
         conversation_logger.error(err_msg)
         raise ValueError(err_msg)
 
-    llm_model = AutoModelForCausalLM.from_pretrained(llm_dirname, torch_dtype=torch.float16).to(DEVICE)
+    if DEVICE.type == "cpu":
+        llm_model = AutoModelForCausalLM.from_pretrained(llm_dirname).to(DEVICE)
+    else:
+        llm_model = AutoModelForCausalLM.from_pretrained(llm_dirname, torch_dtype=torch.float16).to(DEVICE)
+
     llm_model.eval()
     llm_tokenizer = AutoTokenizer.from_pretrained(llm_dirname)
     conversation_logger.info('The large language model is loaded.')
