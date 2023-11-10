@@ -16,8 +16,6 @@ answer, new_history_list = generate_text(model, tokenizer, cur_query_list=cur_qu
 print(f'History: {new_history_list}')
 print(f'Answer: {answer}')
 
-from transformers import AutoModelForCausalLM, AutoTokenizer
-
 messages = [
     {"role": "user", "content": "What is the smallest country in the world?"},
 ]
