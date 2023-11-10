@@ -14,8 +14,8 @@ import torch.nn as nn
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
 
-# DEVICE = "cuda:0"
-DEVICE = "cpu"
+# DEVICE = torch.device("cuda:0")
+DEVICE = torch.device("cpu")
 
 MultimodalModel = namedtuple('MultimodalModel', 'one_peace pca annoy_index texts llm')
 conversation_logger = logging.getLogger(__name__)
@@ -89,11 +89,11 @@ def generate_answer_based_on_prompt(prompt: str, model: AutoModelForCausalLM, to
     batched_input_ids = torch.nn.utils.rnn.pad_sequence(
         input_ids,
         batch_first=True, padding_value=tokenizer.pad_token_id
-    ).cuda()
+    ).to(DEVICE)
     batched_attention_mask = torch.nn.utils.rnn.pad_sequence(
         attention_mask,
         batch_first=True, padding_value=0
-    ).cuda()
+    ).to(DEVICE)
     generated_ids = model.generate(
         input_ids=batched_input_ids, attention_mask=batched_attention_mask,
         max_new_tokens=1000, do_sample=True
@@ -127,16 +127,17 @@ def generate_logits_based_on_prompt(prompt: str, model: AutoModelForCausalLM, to
     batched_input_ids = torch.nn.utils.rnn.pad_sequence(
         input_ids,
         batch_first=True, padding_value=tokenizer.pad_token_id
-    ).cuda()
+    ).to(DEVICE)
     batched_attention_mask = torch.nn.utils.rnn.pad_sequence(
         attention_mask,
         batch_first=True, padding_value=0
-    ).cuda()
+    ).to(DEVICE)
 
     with torch.no_grad():
         logits = model(
             input_ids=batched_input_ids,
-            attention_mask=batched_attention_mask
+            attention_mask=batched_attention_mask,
+            return_dict=True
         ).logits
 
     return logits.cpu().type(torch.FloatTensor)
@@ -386,7 +387,7 @@ def setup_model_and_tokenizer() -> Tuple[MultimodalModel, AutoTokenizer]:
         conversation_logger.error(err_msg)
         raise ValueError(err_msg)
 
-    llm_model = AutoModelForCausalLM.from_pretrained(llm_dirname, torch_dtype='fp16').cuda()
+    llm_model = AutoModelForCausalLM.from_pretrained(llm_dirname, torch_dtype=torch.float16).to(DEVICE)
     llm_model.eval()
     llm_tokenizer = AutoTokenizer.from_pretrained(llm_dirname)
     conversation_logger.info('The large language model is loaded.')
