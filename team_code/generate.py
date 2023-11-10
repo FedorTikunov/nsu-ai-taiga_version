@@ -434,7 +434,7 @@ def get_ppl(model: MultimodalModel, tokenizer: AutoTokenizer,
     prompt = generate_full_prompt(model, cur_query_list, history_list)
     out_logits = generate_logits_based_on_prompt(prompt, model.llm, tokenizer)
 
-    dialogue_emb = tokenizer.encode(prompt)
+    dialogue_emb = tokenizer.encode(prompt, add_special_tokens=False, return_tensors="pt")
 
     loss = nn.CrossEntropyLoss()
 

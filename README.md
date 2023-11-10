@@ -18,3 +18,12 @@
 * Dockerfile - наш докерфайл для загрузки образа в систему соревнования (подробнее - в инструкции во вкладке data)
 
 !!! Для реального сабмита нужно поменять DEVICE в generate.py
+
+
+docker login cr.msk.sbercloud.ru  # aijcontest AIJcontest0000
+
+docker pull cr.msk.sbercloud.ru/aicloud-base-images-test/cuda11.7-torch2:fdf9bece-630252
+
+docker build --tag nsuaiaij:0.1 .
+docker tag nsuaiaij:0.1 cr.msk.sbercloud.ru/aijcontest/nsu-ai:0.1
+docker push cr.msk.sbercloud.ru/aijcontest/nsu-ai:0.1

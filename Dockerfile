@@ -13,4 +13,5 @@ WORKDIR /app
 
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Возможно, стоит вернуть переход на пользователя jovyan
+USER jovyan
+WORKDIR /home/jovyan
