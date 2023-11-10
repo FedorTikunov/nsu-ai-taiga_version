@@ -133,11 +133,13 @@ def generate_logits_based_on_prompt(prompt: str, model: AutoModelForCausalLM, to
         batch_first=True, padding_value=0
     ).cuda()
 
-    logits = model[0](
-        input_ids=batched_input_ids, attention_mask=batched_attention_mask
-    ).logits
+    with torch.no_grad():
+        logits = model(
+            input_ids=batched_input_ids,
+            attention_mask=batched_attention_mask
+        ).logits
 
-    return logits
+    return logits.cpu().type(torch.FloatTensor)
 
 
 def cardinal_to_str(value: int) -> str:
@@ -413,7 +415,8 @@ def generate_text(model: MultimodalModel, tokenizer: AutoTokenizer,
 
 
 def get_ppl(model: MultimodalModel, tokenizer: AutoTokenizer,
-            cur_query_tuple: Tuple[List[Dict[str, str]], str], history_list: Tuple[str, str]) -> Tuple[float, Tuple[str, str]]:
+            cur_query_tuple: Tuple[List[Dict[str, str]], str],
+            history_list: Tuple[str, str]) -> Tuple[float, Tuple[str, str]]:
 
     cur_query_list, text = cur_query_tuple
 
