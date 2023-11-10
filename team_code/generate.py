@@ -14,8 +14,8 @@ import torch.nn as nn
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
 
-# DEVICE = torch.device("cuda:0")
-DEVICE = torch.device("cpu")
+DEVICE = torch.device("cuda:0")
+# DEVICE = torch.device("cpu")
 
 MultimodalModel = namedtuple('MultimodalModel', 'one_peace pca annoy_index texts llm')
 conversation_logger = logging.getLogger(__name__)
@@ -415,6 +415,7 @@ def generate_text(model: MultimodalModel, tokenizer: AutoTokenizer,
                   cur_query_list: List[Dict[str, str]], history_list: Tuple[str, str]) -> Tuple[str, Tuple[str, str]]:
 
     prompt = generate_full_prompt(model, cur_query_list, history_list)
+    conversation_logger.info(f'Current prompt: {prompt}')
     answer = generate_answer_based_on_prompt(prompt, model.llm, tokenizer)
 
     history_list = (prompt, answer)
@@ -445,3 +446,16 @@ def get_ppl(model: MultimodalModel, tokenizer: AutoTokenizer,
     ppl = torch.exp2(neg_log_likelihood)
     
     return ppl.item(), dialogue_emb
+
+
+def prepare_logger():
+    conversation_logger.setLevel(logging.INFO)
+    fmt_str = '%(filename)s[LINE:%(lineno)d]# %(levelname)-8s ' \
+              '[%(asctime)s]  %(message)s'
+    formatter = logging.Formatter(fmt_str)
+    stdout_handler = logging.StreamHandler(sys.stdout)
+    stdout_handler.setFormatter(formatter)
+    conversation_logger.addHandler(stdout_handler)
+    file_handler = logging.FileHandler('multimodal_conversation.log')
+    file_handler.setFormatter(formatter)
+    conversation_logger.addHandler(file_handler)
