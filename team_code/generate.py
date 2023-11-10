@@ -14,8 +14,8 @@ import torch.nn as nn
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
 
-DEVICE = torch.device("cuda:0")
-# DEVICE = torch.device("cpu")
+# DEVICE = torch.device("cuda:0")
+DEVICE = torch.device("cpu")
 
 MultimodalModel = namedtuple('MultimodalModel', 'one_peace pca annoy_index texts llm')
 conversation_logger = logging.getLogger(__name__)
@@ -89,11 +89,12 @@ def generate_answer_based_on_prompt(prompt: str, model: AutoModelForCausalLM, to
     batched_input_ids = torch.nn.utils.rnn.pad_sequence(
         input_ids,
         batch_first=True, padding_value=0  # <unk> idx
-    ).to(DEVICE)
+    ).to(DEVICE)[:,:-1]
     batched_attention_mask = torch.nn.utils.rnn.pad_sequence(
         attention_mask,
         batch_first=True, padding_value=0
-    ).to(DEVICE)
+    ).to(DEVICE)[:,:-1]
+
     generated_ids = model.generate(
         input_ids=batched_input_ids, attention_mask=batched_attention_mask,
         max_new_tokens=1000, do_sample=True
@@ -112,6 +113,7 @@ def generate_answer_based_on_prompt(prompt: str, model: AutoModelForCausalLM, to
                    f'because it does not start with the prompt "{input_prompt}".')
         conversation_logger.error(err_msg)
         raise ValueError(err_msg)
+
     return ' '.join(predicted_text[len(input_prompt):].split()).strip()
 
 
