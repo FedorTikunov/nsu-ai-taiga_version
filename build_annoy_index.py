@@ -160,7 +160,6 @@ def main():
             raise ValueError(err_msg)
         if annoy_index is None:
             annoy_index = AnnoyIndex(feature_vector_size, 'angular')
-            annoy_index.on_disk_build(annoy_index_fname)
         for i in range(vectors.shape[0]):
             annoy_index.add_item(len(text_collection), vectors[i])
             text_collection.append(texts[i][2])
@@ -177,6 +176,7 @@ def main():
 
     annoy_index.set_seed(RANDOM_SEED)
     annoy_index.build(args.annoy_trees, n_jobs=-1)
+    annoy_index.save(annoy_index_fname)
     indexing_logger.info(f'The Annoy index has been saved into the "{annoy_index_fname}".')
 
 
