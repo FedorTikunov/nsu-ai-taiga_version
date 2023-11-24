@@ -1,4 +1,3 @@
-import codecs
 import fileinput
 import pickle
 from collections import namedtuple
