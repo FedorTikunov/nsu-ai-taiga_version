@@ -80,8 +80,14 @@ def main():
         raise ValueError(err_msg)
 
     output_json_fname = os.path.normpath(args.output_json)
-    if not os.path.isfile(output_json_fname):
-        err_msg = f'The file "{output_json_fname}" does not exist!'
+    output_json_dir = os.path.dirname(output_json_fname)
+    if len(output_json_dir) > 0:
+        if not os.path.isdir(output_json_dir):
+            err_msg = f'The directory "{output_json_dir}" does not exist!'
+            object_search_logger.error(err_msg)
+            raise ValueError(err_msg)
+    if os.path.basename(output_json_fname) == os.path.basename(input_object_fname):
+        err_msg = 'The input and output files have same names!'
         object_search_logger.error(err_msg)
         raise ValueError(err_msg)
 
