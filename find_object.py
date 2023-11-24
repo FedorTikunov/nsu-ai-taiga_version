@@ -1,6 +1,6 @@
 import json
 from argparse import ArgumentParser
-import codecs
+import fileinput
 import logging
 import os
 import pickle
@@ -142,14 +142,13 @@ def main():
 
     paragraphs = []
     counter = 0
-    with codecs.open(text_corpus_fname, mode='r', encoding='utf-8', errors='ignore') as fp:
-        for curline in fp:
-            prepline = curline.strip()
-            if len(prepline) > 0:
-                paragraphs.append(prepline)
-                counter += 1
-                if counter % 1_000_000 == 0:
-                    object_search_logger.info(f'{counter} paragraphs are loaded from the "{text_corpus_fname}".')
+    for curline in fileinput.input(text_corpus_fname, encoding='utf-8'):
+        prepline = curline.strip()
+        if len(prepline) > 0:
+            paragraphs.append(prepline)
+            counter += 1
+            if counter % 1_000_000 == 0:
+                object_search_logger.info(f'{counter} paragraphs are loaded from the "{text_corpus_fname}".')
     if n_annoy_items != len(paragraphs):
         err_msg = (f'The Wiki text corpus does not correspond to the Wiki text index, '
                    f'because their sizes are not same! {n_annoy_items} != {len(paragraphs)}.')
