@@ -157,7 +157,7 @@ def main():
         raise ValueError(err_msg)
     object_search_logger.info('All Wikipedia paragraphs are loaded.')
 
-    found_indices, distances = model.annoy_index.get_nns_by_vector(
+    found_indices, distances = annoy_index.get_nns_by_vector(
         object_vector,
         n=args.top_n, search_k=-1, include_distances=True
     )
