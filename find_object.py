@@ -122,13 +122,13 @@ def main():
     if args.input_object_type == 'image':
         src_images = model.process_image([input_object_fname])
         with torch.no_grad():
-            image_features = model.one_peace.extract_image_features(src_images)
+            image_features = model.extract_image_features(src_images)
         object_vector = pca_pipeline.transform(image_features.cpu().type(torch.FloatTensor).numpy()[0:1])[0]
         object_search_logger.info('The input image is vectorized.')
     else:
         src_audios, audio_padding_masks = model.one_peace.process_audio([input_object_fname])
         with torch.no_grad():
-            audio_features = model.one_peace.extract_audio_features(src_audios, audio_padding_masks)
+            audio_features = model.extract_audio_features(src_audios, audio_padding_masks)
         object_vector = pca_pipeline.transform(audio_features.cpu().type(torch.FloatTensor).numpy()[0:1])[0]
         object_search_logger.info('The input audio is vectorized.')
     feature_vector_size = object_vector.shape[0]
