@@ -1,5 +1,6 @@
-import json
 from argparse import ArgumentParser
+import codecs
+import json
 import fileinput
 import logging
 import os

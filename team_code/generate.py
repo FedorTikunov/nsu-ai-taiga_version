@@ -1,4 +1,5 @@
 import codecs
+import fileinput
 import pickle
 from collections import namedtuple
 import gc
@@ -368,14 +369,13 @@ def setup_model_and_tokenizer() -> Tuple[MultimodalModel, AutoTokenizer]:
         raise ValueError(err_msg)
     paragraphs = []
     counter = 0
-    with codecs.open(texts_fname, mode='r', encoding='utf-8') as fp:
-        for curline in fp:
-            prepline = curline.strip()
-            if len(prepline) > 0:
-                paragraphs.append(prepline)
-                counter += 1
-                if counter % 1_000_000 == 0:
-                    conversation_logger.info(f'{counter} paragraphs are loaded from the "{texts_fname}".')
+    for curline in fileinput.input(texts_fname, encoding='utf-8'):
+        prepline = curline.strip()
+        if len(prepline) > 0:
+            paragraphs.append(prepline)
+            counter += 1
+            if counter % 1_000_000 == 0:
+                conversation_logger.info(f'{counter} paragraphs are loaded from the "{texts_fname}".')
     gc.collect()
     info_msg = (f'The text corpus with Wikipedia paragraphs is loaded. '
                 f'There are {len(paragraphs)} paragraphs in this corpus.')
