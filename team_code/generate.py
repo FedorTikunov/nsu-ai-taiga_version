@@ -366,10 +366,20 @@ def setup_model_and_tokenizer() -> Tuple[MultimodalModel, AutoTokenizer]:
         err_msg = f'The file "{texts_fname}" does not exist!'
         conversation_logger.error(err_msg)
         raise ValueError(err_msg)
+    paragraphs = []
+    counter = 0
     with codecs.open(texts_fname, mode='r', encoding='utf-8') as fp:
-        paragraphs = list(filter(lambda it2: len(it2) > 0, map(lambda it1: it1.strip(), fp.readlines())))
+        for curline in fp:
+            prepline = curline.strip()
+            if len(prepline) > 0:
+                paragraphs.append(prepline)
+                counter += 1
+                if counter % 1_000_000 == 0:
+                    conversation_logger.info(f'{counter} paragraphs are loaded from the "{texts_fname}".')
     gc.collect()
-    conversation_logger.info('The text corpus with Wikipedia paragraphs is loaded.')
+    info_msg = (f'The text corpus with Wikipedia paragraphs is loaded. '
+                f'There are {len(paragraphs)} paragraphs in this corpus.')
+    conversation_logger.info(info_msg)
 
     annoy_fname = os.path.join(model_dir, 'en_wiki_paragraphs.ann')
     if not os.path.isfile(annoy_fname):
