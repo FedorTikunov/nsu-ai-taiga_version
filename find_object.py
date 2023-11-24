@@ -141,13 +141,15 @@ def main():
     object_search_logger.info(info_msg)
 
     paragraphs = []
+    counter = 0
     with codecs.open(text_corpus_fname, mode='r', encoding='utf-8', errors='ignore') as fp:
-        curline = fp.readline()
-        while len(curline) > 0:
+        for curline in fp:
             prepline = curline.strip()
             if len(prepline) > 0:
                 paragraphs.append(prepline)
-            curline = fp.readline()
+                counter += 1
+                if counter % 100_000 == 0:
+                    object_search_logger.info(f'{counter} paragraphs are loaded from the "{text_corpus_fname}".')
     if n_annoy_items != len(paragraphs):
         err_msg = (f'The Wiki text corpus does not correspond to the Wiki text index, '
                    f'because their sizes are not same! {n_annoy_items} != {len(paragraphs)}.')
