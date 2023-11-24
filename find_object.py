@@ -148,7 +148,7 @@ def main():
             if len(prepline) > 0:
                 paragraphs.append(prepline)
                 counter += 1
-                if counter % 100_000 == 0:
+                if counter % 1_000_000 == 0:
                     object_search_logger.info(f'{counter} paragraphs are loaded from the "{text_corpus_fname}".')
     if n_annoy_items != len(paragraphs):
         err_msg = (f'The Wiki text corpus does not correspond to the Wiki text index, '
