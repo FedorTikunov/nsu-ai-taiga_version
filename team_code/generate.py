@@ -192,7 +192,7 @@ def find_text_by_audio(audio_fname: str, model: MultimodalModel, top_n: int = 10
     audio_caption = audio_caption.strip()
     if audio_caption[-1] not in {'.', '!', '?'}:
         audio_caption = audio_caption + '.'
-    if not audio_caption[0].istitle():
+    if not audio_caption[0].isupper():
         audio_caption = audio_caption[0].upper() + audio_caption[1:]
     if is_speech:
         return audio_caption
