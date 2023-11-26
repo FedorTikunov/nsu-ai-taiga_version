@@ -542,7 +542,7 @@ def setup_model_and_tokenizer() -> Tuple[MultimodalModel, AutoTokenizer]:
         conversation_logger.error(err_msg)
         raise ValueError(err_msg)
 
-    audio_cls_dirname = os.path.join(model_dir, 'audioset')
+    audio_cls_dirname = os.path.join(model_dir, 'auxiliary_models', 'audioset')
     if not os.path.isdir(audio_cls_dirname):
         err_msg = f'The directory "{audio_cls_dirname}" does not exist!'
         conversation_logger.error(err_msg)
@@ -553,7 +553,7 @@ def setup_model_and_tokenizer() -> Tuple[MultimodalModel, AutoTokenizer]:
     else:
         audio_cls = ASTForAudioClassification.from_pretrained(audio_cls_dirname, torch_dtype=torch.float16).to(DEVICE)
 
-    image_captioning_dirname = os.path.join(model_dir, 'blip')
+    image_captioning_dirname = os.path.join(model_dir, 'auxiliary_models', 'blip')
     if not os.path.isdir(image_captioning_dirname):
         err_msg = f'The directory "{image_captioning_dirname}" does not exist!'
         conversation_logger.error(err_msg)
@@ -569,7 +569,7 @@ def setup_model_and_tokenizer() -> Tuple[MultimodalModel, AutoTokenizer]:
             torch_dtype=torch.float16
         ).to(DEVICE)
 
-    asr_dirname = os.path.join(model_dir, 'whisper_medium')
+    asr_dirname = os.path.join(model_dir, 'auxiliary_models', 'whisper_medium')
     if not os.path.isdir(asr_dirname):
         err_msg = f'The directory "{asr_dirname}" does not exist!'
         conversation_logger.error(err_msg)
@@ -581,7 +581,7 @@ def setup_model_and_tokenizer() -> Tuple[MultimodalModel, AutoTokenizer]:
         device=DEVICE
     )
 
-    sbert_dirname = os.path.join(model_dir, 'sbert')
+    sbert_dirname = os.path.join(model_dir, 'auxiliary_models', 'sbert')
     if not os.path.isdir(sbert_dirname):
         err_msg = f'The directory "{sbert_dirname}" does not exist!'
         conversation_logger.error(err_msg)
