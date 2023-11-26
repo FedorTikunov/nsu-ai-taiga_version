@@ -1,0 +1,9 @@
+__pycache__/
+*.md
+*.json
+*.bin
+*.model
+*.txt
+*.pt
+*.safetensors
+*.h5

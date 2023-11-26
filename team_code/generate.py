@@ -5,19 +5,34 @@ import gc
 import logging
 import os
 import sys
+import tempfile
 from typing import Dict, List, Tuple
 
+import numpy as np
 from annoy import AnnoyIndex
+import librosa
+from nltk import sent_tokenize
+from sklearn.metrics.pairwise import cosine_distances
 from sklearn.pipeline import Pipeline
+from pydub import AudioSegment
+from pydub.exceptions import CouldntDecodeError
 import torch
 import torch.nn as nn
 from transformers import AutoModelForCausalLM, AutoTokenizer
+from transformers import BlipProcessor, BlipForConditionalGeneration
+from transformers import AutoFeatureExtractor, ASTForAudioClassification
+from transformers import pipeline
+from sentence_transformers import SentenceTransformer
 
 
 # DEVICE = torch.device("cuda:0")
 DEVICE = torch.device("cpu")
+TARGET_SAMPLING_FREQUENCY = 16_000
 
-MultimodalModel = namedtuple('MultimodalModel', 'one_peace pca annoy_index texts llm')
+MultimodalModel = namedtuple(
+    'MultimodalModel',
+    'image audio speech sbert one_peace pca annoy_index texts llm'
+)
 conversation_logger = logging.getLogger(__name__)
 PUNCTUATION = {'.', '?', '!', ':', '-', ';'}
 CARDINAL_UNITS = {'1': 'one', '2': 'two', '3': 'three', '4': 'four', '5': 'five', '6': 'six', '7': 'seven',
@@ -34,11 +49,123 @@ ORDINAL_TENS = {'20': 'twentieth', '30': 'thirtieth', '40': 'fortieth', '50': 'f
                 '70': 'seventieth', '80': 'eightieth', '90': 'ninetieth'}
 
 
-def find_texts_by_image(image_fname: str, model: MultimodalModel, top_n: int = 1, search_k: int = -1) -> List[str]:
+def generate_image_caption(image_fname: str, model: MultimodalModel) -> str:
+    instruction = '[IMAGE:img] what does the image describe?  -> [TEXT:cap]'
+    data = {'img': image_fname}
+    output = model.ofasys.inference(instruction, data=data)
+    return output.text
+
+
+def transform_to_wavpcm(src_fname: str, dst_fname: str) -> None:
+    found_idx = src_fname.rfind('.')
+    if found_idx < 0:
+        err_msg = f'The extension of the file "{src_fname}" is unknown. ' \
+                  f'So, I cannot determine a format of this sound file.'
+        raise ValueError(err_msg)
+    if not os.path.isfile(src_fname):
+        err_msg = f'The file "{src_fname}" does not exist!'
+        raise IOError(err_msg)
+    source_audio_extension = src_fname[(found_idx + 1):]
+    try:
+        audio = AudioSegment.from_file(src_fname, format=source_audio_extension)
+    except CouldntDecodeError as e1:
+        audio = None
+        additional_err_msg = str(e1)
+    except BaseException as e2:
+        audio = None
+        additional_err_msg = str(e2)
+    else:
+        additional_err_msg = ''
+    if audio is None:
+        err_msg = f'The file "{src_fname}" cannot be opened.'
+        if additional_err_msg != '':
+            err_msg += f' {additional_err_msg}'
+        raise IOError(err_msg)
+    if audio.channels != 1:
+        audio.set_channels(1)
+    if audio.frame_rate != TARGET_SAMPLING_FREQUENCY:
+        audio.set_frame_rate(TARGET_SAMPLING_FREQUENCY)
+    if audio.frame_width != 2:
+        audio.set_sample_width(2)
+    target_parameters = ['-ac', '1', '-ar', f'{TARGET_SAMPLING_FREQUENCY}', '-acodec', 'pcm_s16le']
+    audio.export(dst_fname, format='wav', parameters=target_parameters)
+
+
+def load_sound(audio_fname: str) -> Tuple[np.ndarray, str]:
+    with tempfile.NamedTemporaryFile(mode='wb', delete=False, suffix='.wav') as fp:
+        tmp_wav_name = fp.name
+    try:
+        transform_to_wavpcm(audio_fname, tmp_wav_name)
+    except BaseException as ex:
+        err_msg = str(ex)
+        conversation_logger.error(err_msg)
+        raise
+    conversation_logger.info(f'The sound "{audio_fname}" is converted to the "{tmp_wav_name}".')
+    try:
+        input_sound, _ = librosa.load(path=tmp_wav_name, sr=TARGET_SAMPLING_FREQUENCY, dtype=np.float32)
+    except BaseException as ex:
+        err_msg = str(ex)
+        conversation_logger.error(err_msg)
+        raise
+    conversation_logger.info(f'The sound is "{tmp_wav_name}" is loaded.')
+    return input_sound, tmp_wav_name
+
+
+def generate_audio_caption(audio_fname: str, model: MultimodalModel) -> Tuple[str, bool]:
+    sound, tmp_sound_fname = load_sound(audio_fname)
+    try:
+        inputs = model.audio[0](
+            [sound.tolist()],
+            sampling_rate=TARGET_SAMPLING_FREQUENCY, return_tensors="pt"
+        )
+        with torch.no_grad():
+            logits = model.audio[1](**inputs).logits
+        del inputs
+        predicted_class_ids = int(torch.argmax(logits, dim=-1).item())
+        del logits
+        predicted_label = model.audio[1].config.id2label[predicted_class_ids]
+        audio_caption = ' '.join(' '.join(predicted_label.split('_')).split())
+        if (audio_caption.lower().find('speech') >= 0) and (audio_caption.lower().find('speech noise') < 0):
+            audio_caption = model.speech(sound)['text']
+            is_speech = True
+        else:
+            is_speech = False
+        del sound
+    finally:
+        if (len(tmp_sound_fname) > 0) and os.path.isfile(tmp_sound_fname):
+            os.remove(tmp_sound_fname)
+    return audio_caption, is_speech
+
+
+def find_long_text_similar_to_short_text(short_text: str, long_texts: List[str], model: MultimodalModel) -> str:
+    indices_of_long_texts = []
+    all_sentences = []
+    for idx, txt in enumerate(long_texts):
+        sentences_in_text = sent_tokenize(txt)
+        for cur_sent in sentences_in_text:
+            all_sentences.append(cur_sent)
+            indices_of_long_texts.append(idx)
+        del sentences_in_text
+    sentence_embeddings_of_long_texts = model.sbert.encode(all_sentences)
+    del all_sentences
+    sentence_embeddings_of_short_text = model.sbert.encode([short_text])
+    distances = cosine_distances(X=sentence_embeddings_of_short_text, Y=sentence_embeddings_of_long_texts)[0].tolist()
+    del sentence_embeddings_of_short_text, sentence_embeddings_of_long_texts
+    sentences_with_distances = sorted(
+        list(zip(indices_of_long_texts, distances)),
+        key=lambda it: (it[1], it[0])
+    )
+    del distances, indices_of_long_texts
+    found_idx = sentences_with_distances[0][0]
+    return long_texts[found_idx]
+
+
+def find_text_by_image(image_fname: str, model: MultimodalModel, top_n: int = 100, search_k: int = -1) -> str:
     if not os.path.isfile(image_fname):
         err_msg = f'The image "{image_fname}" does not exist!'
         conversation_logger.error(err_msg)
         raise ValueError(err_msg)
+    image_caption = generate_image_caption(image_fname, model)
     src_images = model.one_peace.process_image([image_fname])
     with torch.no_grad():
         image_features = model.one_peace.extract_image_features(src_images)
@@ -47,14 +174,28 @@ def find_texts_by_image(image_fname: str, model: MultimodalModel, top_n: int = 1
     del image_features
     found_indices = model.annoy_index.get_nns_by_vector(image_vector, n=top_n, search_k=search_k)
     del image_vector
-    return [model.texts[idx] for idx in found_indices]
+    found_texts = [model.texts[idx] for idx in found_indices]
+    del found_indices
+    if len(found_texts) > 1:
+        result = image_caption + ' ' + find_long_text_similar_to_short_text(image_caption, found_texts, model)
+    else:
+        result = image_caption + ' ' + found_texts[0]
+    return ' '.join(result.split())
 
 
-def find_texts_by_audio(audio_fname: str, model: MultimodalModel, top_n: int = 1, search_k: int = -1) -> List[str]:
+def find_text_by_audio(audio_fname: str, model: MultimodalModel, top_n: int = 100, search_k: int = -1) -> str:
     if not os.path.isfile(audio_fname):
         err_msg = f'The image "{audio_fname}" does not exist!'
         conversation_logger.error(err_msg)
         raise ValueError(err_msg)
+    audio_caption, is_speech = generate_audio_caption(audio_fname, model)
+    audio_caption = audio_caption.strip()
+    if audio_caption[-1] not in {'.', '!', '?'}:
+        audio_caption = audio_caption + '.'
+    if not audio_caption[0].istitle():
+        audio_caption = audio_caption[0].upper() + audio_caption[1:]
+    if is_speech:
+        return audio_caption
     src_audios, audio_padding_masks = model.one_peace.process_audio([audio_fname])
     with torch.no_grad():
         audio_features = model.one_peace.extract_audio_features(src_audios, audio_padding_masks)
@@ -63,7 +204,13 @@ def find_texts_by_audio(audio_fname: str, model: MultimodalModel, top_n: int = 1
     del audio_features
     found_indices = model.annoy_index.get_nns_by_vector(audio_vector, n=top_n, search_k=search_k)
     del audio_vector
-    return [model.texts[idx] for idx in found_indices]
+    found_texts = [model.texts[idx] for idx in found_indices]
+    del found_indices
+    if len(found_texts) > 1:
+        result = audio_caption + ' ' + find_long_text_similar_to_short_text(audio_caption, found_texts, model)
+    else:
+        result = audio_caption + ' ' + found_texts[0]
+    return ' '.join(result.split())
 
 
 def tokenize_prompt(prompt: str, tokenizer: AutoTokenizer, add_eos_token: bool = True,
@@ -291,8 +438,8 @@ def generate_full_prompt(model: MultimodalModel,
                 new_prompt = previous_dialogue
     for cur_text in text_list:
         new_prompt += (' ' + cur_text)
-    image_descriptions = [find_texts_by_image(cur, model, search_k=search_k)[0] for cur in image_file_list]
-    audio_descriptions = [find_texts_by_audio(cur, model, search_k=search_k)[0] for cur in audio_file_list]
+    image_descriptions = [find_text_by_image(cur, model, search_k=search_k) for cur in image_file_list]
+    audio_descriptions = [find_text_by_audio(cur, model, search_k=search_k) for cur in audio_file_list]
     del text_list, image_file_list, audio_file_list
     if len(image_descriptions) > 0:
         new_prompt += (' ' + generate_prompt_for_image(image_descriptions))
@@ -395,6 +542,52 @@ def setup_model_and_tokenizer() -> Tuple[MultimodalModel, AutoTokenizer]:
         conversation_logger.error(err_msg)
         raise ValueError(err_msg)
 
+    audio_cls_dirname = os.path.join(model_dir, 'audioset')
+    if not os.path.isdir(audio_cls_dirname):
+        err_msg = f'The directory "{audio_cls_dirname}" does not exist!'
+        conversation_logger.error(err_msg)
+        raise ValueError(err_msg)
+    audio_fe = AutoFeatureExtractor.from_pretrained(audio_cls_dirname)
+    if DEVICE.type == "cpu":
+        audio_cls = ASTForAudioClassification.from_pretrained(audio_cls_dirname).to(DEVICE)
+    else:
+        audio_cls = ASTForAudioClassification.from_pretrained(audio_cls_dirname, torch_dtype=torch.float16).to(DEVICE)
+
+    image_captioning_dirname = os.path.join(model_dir, 'blip')
+    if not os.path.isdir(image_captioning_dirname):
+        err_msg = f'The directory "{image_captioning_dirname}" does not exist!'
+        conversation_logger.error(err_msg)
+        raise ValueError(err_msg)
+    image_processor = BlipProcessor.from_pretrained(image_captioning_dirname)
+    if DEVICE.type == "cpu":
+        image_caption_generator = BlipForConditionalGeneration.from_pretrained(
+            image_captioning_dirname
+        ).to(DEVICE)
+    else:
+        image_caption_generator = BlipForConditionalGeneration.from_pretrained(
+            image_captioning_dirname,
+            torch_dtype=torch.float16
+        ).to(DEVICE)
+
+    asr_dirname = os.path.join(model_dir, 'whisper_medium')
+    if not os.path.isdir(asr_dirname):
+        err_msg = f'The directory "{asr_dirname}" does not exist!'
+        conversation_logger.error(err_msg)
+        raise ValueError(err_msg)
+    asr_pipe = pipeline(
+        'automatic-speech-recognition',
+        model=asr_dirname,
+        chunk_length_s=30,
+        device=DEVICE
+    )
+
+    sbert_dirname = os.path.join(model_dir, 'sbert')
+    if not os.path.isdir(sbert_dirname):
+        err_msg = f'The directory "{sbert_dirname}" does not exist!'
+        conversation_logger.error(err_msg)
+        raise ValueError(err_msg)
+    sentence_embedder = SentenceTransformer(sbert_dirname, device=DEVICE.type)
+
     llm_dirname = os.path.join(model_dir, 'llm')
     if not os.path.isdir(llm_dirname):
         err_msg = f'The directory "{llm_dirname}" does not exist!'
@@ -411,6 +604,10 @@ def setup_model_and_tokenizer() -> Tuple[MultimodalModel, AutoTokenizer]:
     conversation_logger.info('The large language model is loaded.')
 
     full_pipeline_for_conversation = MultimodalModel(
+        image=(image_processor, image_caption_generator),
+        audio=(audio_fe, audio_cls),
+        speech=asr_pipe,
+        sbert=sentence_embedder,
         one_peace=onepeace_model,
         pca=pca,
         annoy_index=annoy_index,

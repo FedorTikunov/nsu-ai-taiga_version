@@ -1,4 +1,4 @@
-from team_code.generate import setup_model_and_tokenizer, generate_text, get_ppl, prepare_logger
+from team_code.generate import setup_model_and_tokenizer, generate_text, prepare_logger
 
 
 prepare_logger()
