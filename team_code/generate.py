@@ -183,7 +183,8 @@ def find_text_by_image(image_fname: str, model: MultimodalModel, top_n: int = 10
     return ' '.join(result.split())
 
 
-def find_text_by_audio(audio_fname: str, model: MultimodalModel, top_n: int = 100, search_k: int = -1) -> str:
+def find_text_by_audio(audio_fname: str, model: MultimodalModel, top_n: int = 100,
+                       search_k: int = -1) -> Tuple[str, bool]:
     if not os.path.isfile(audio_fname):
         err_msg = f'The image "{audio_fname}" does not exist!'
         conversation_logger.error(err_msg)
@@ -195,7 +196,7 @@ def find_text_by_audio(audio_fname: str, model: MultimodalModel, top_n: int = 10
     if not audio_caption[0].isupper():
         audio_caption = audio_caption[0].upper() + audio_caption[1:]
     if is_speech:
-        return audio_caption
+        return audio_caption, True
     src_audios, audio_padding_masks = model.one_peace.process_audio([audio_fname])
     with torch.no_grad():
         audio_features = model.one_peace.extract_audio_features(src_audios, audio_padding_masks)
@@ -210,7 +211,7 @@ def find_text_by_audio(audio_fname: str, model: MultimodalModel, top_n: int = 10
         result = audio_caption + ' ' + find_long_text_similar_to_short_text(audio_caption, found_texts, model)
     else:
         result = audio_caption + ' ' + found_texts[0]
-    return ' '.join(result.split())
+    return ' '.join(result.split()), False
 
 
 def tokenize_prompt(prompt: str, tokenizer: AutoTokenizer, add_eos_token: bool = True,
@@ -326,44 +327,56 @@ def generate_prompt_for_image(image_description: List[str]) -> str:
     if len(image_description) < 1:
         return ''
     if len(image_description) == 1:
-        prompt = (f'Please imagine that you have just looked at an image that probably corresponds to '
+        prompt = (f'I have just looked at an image that probably corresponds to '
                   f'the following text description. {image_description[0]}')
         if prompt[-1] not in PUNCTUATION:
             prompt += '.'
         elif prompt[-1] not in {'.', '?', '!'}:
             prompt = prompt[:-1] + '.'
     else:
-        prompt = (f'Please imagine that you have just looked at {cardinal_to_str(len(image_description))} images '
-                  f'that probably match the following text descriptions.')
-        for k, v in enumerate(image_description):
-            prompt += f' The {ordinal_to_str(k + 1)} image. {v}'
+        prompt = f'I have just looked at {cardinal_to_str(len(image_description))} images.'
+        counter = 1
+        for it in image_description:
+            prompt += (f' The {ordinal_to_str(counter)} image probably corresponds to '
+                       f'the following text description. {it}')
             if prompt[-1] not in PUNCTUATION:
                 prompt += '.'
             elif prompt[-1] not in {'.', '?', '!'}:
                 prompt = prompt[:-1] + '.'
-    return prompt
+            counter += 1
+    return prompt + ' Please imagine that you have just looked the same.'
 
 
-def generate_prompt_for_audio(audio_description: List[str]) -> str:
+def generate_prompt_for_audio(audio_description: List[Tuple[str, bool]]) -> str:
     if len(audio_description) < 1:
         return ''
     if len(audio_description) == 1:
-        prompt = (f'Please imagine that you have just heard a sound that probably corresponds to '
-                  f'the following text description. {audio_description[0]}')
+        if audio_description[0][1]:
+            prompt = (f'I have just heard a sound that probably contains the '
+                      f'following speech. {audio_description[0][0]}')
+        else:
+            prompt = (f'I have just heard a sound that probably corresponds to '
+                      f'the following text description. {audio_description[0][0]}')
         if prompt[-1] not in PUNCTUATION:
             prompt += '.'
         elif prompt[-1] not in {'.', '?', '!'}:
             prompt = prompt[:-1] + '.'
     else:
-        prompt = (f'Please imagine that you have just heard {cardinal_to_str(len(audio_description))} sounds '
-                  f'that probably match the following text descriptions.')
-        for k, v in enumerate(audio_description):
-            prompt += f' The {ordinal_to_str(k + 1)} sound. {v}'
+        prompt = f'I have just heard {cardinal_to_str(len(audio_description))} sounds.'
+        counter = 1
+        for it in audio_description:
+            if it[1]:
+                prompt += (f' The {ordinal_to_str(counter)} sound probably contains the '
+                           f'following speech. {it[0]}')
+            else:
+                prompt += (f' The {ordinal_to_str(counter)} sound probably corresponds to '
+                           f'the following text description. {it[0]}')
             if prompt[-1] not in PUNCTUATION:
                 prompt += '.'
             elif prompt[-1] not in {'.', '?', '!'}:
                 prompt = prompt[:-1] + '.'
-    return prompt
+            counter += 1
+    return prompt + ' Please imagine that you have just heard the same.'
 
 
 def parse_query(cur_query_list: List[Dict[str, str]]) -> Tuple[List[str], List[str], List[str]]:
@@ -425,7 +438,7 @@ def generate_full_prompt(model: MultimodalModel,
                        f'but the model\'s last answer {last_answer} is non empty. It is impossible!')
             conversation_logger.error(err_msg)
             raise ValueError(err_msg)
-        new_prompt = ('<s>[INST] You are a useful and friendly interlocutor with great erudition and '
+        new_prompt = ('<s>[INST] You are a useful and friendly assistant with great erudition and '
                       'developed intelligence. You can keep up a conversation on various topics and even know '
                       'how to play complex intellectual games. ')
     else:
@@ -436,15 +449,16 @@ def generate_full_prompt(model: MultimodalModel,
                 new_prompt = previous_dialogue[:-7].strip()
             else:
                 new_prompt = previous_dialogue
-    for cur_text in text_list:
-        new_prompt += (' ' + cur_text)
     image_descriptions = [find_text_by_image(cur, model, search_k=search_k) for cur in image_file_list]
     audio_descriptions = [find_text_by_audio(cur, model, search_k=search_k) for cur in audio_file_list]
-    del text_list, image_file_list, audio_file_list
+    del image_file_list, audio_file_list
     if len(image_descriptions) > 0:
         new_prompt += (' ' + generate_prompt_for_image(image_descriptions))
     if len(audio_descriptions) > 0:
         new_prompt += (' ' + generate_prompt_for_audio(audio_descriptions))
+    for cur_text in text_list:
+        new_prompt += (' ' + cur_text)
+    del text_list
     new_prompt += ' [/INST]'
     return ' '.join(new_prompt.strip().split())
 
