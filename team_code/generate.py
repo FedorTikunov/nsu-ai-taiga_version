@@ -23,10 +23,10 @@ from transformers import BlipProcessor, BlipForConditionalGeneration
 from transformers import AutoFeatureExtractor, ASTForAudioClassification
 from transformers import pipeline
 from sentence_transformers import SentenceTransformer
+from PIL import Image
 
-
-# DEVICE = torch.device("cuda:0")
-DEVICE = torch.device("cpu")
+DEVICE = torch.device("cuda:0")
+# DEVICE = torch.device("cpu")
 TARGET_SAMPLING_FREQUENCY = 16_000
 
 MultimodalModel = namedtuple(
@@ -50,10 +50,14 @@ ORDINAL_TENS = {'20': 'twentieth', '30': 'thirtieth', '40': 'fortieth', '50': 'f
 
 
 def generate_image_caption(image_fname: str, model: MultimodalModel) -> str:
-    instruction = '[IMAGE:img] what does the image describe?  -> [TEXT:cap]'
-    data = {'img': image_fname}
-    output = model.ofasys.inference(instruction, data=data)
-    return output.text
+    raw_image = Image.open(image_fname).convert('RGB')
+    if DEVICE.type == "cpu":
+        inputs = model.image[0](raw_image, return_tensors="pt").to(DEVICE)
+    else:    
+        inputs = model.image[0](raw_image, return_tensors="pt").to(DEVICE, torch.float16)
+    out = model.image[1].generate(**inputs)
+    output = model.image[0].decode(out[0], skip_special_tokens=True)
+    return output
 
 
 def transform_to_wavpcm(src_fname: str, dst_fname: str) -> None:
@@ -114,10 +118,15 @@ def load_sound(audio_fname: str) -> Tuple[np.ndarray, str]:
 def generate_audio_caption(audio_fname: str, model: MultimodalModel) -> Tuple[str, bool]:
     sound, tmp_sound_fname = load_sound(audio_fname)
     try:
-        inputs = model.audio[0](
-            [sound.tolist()],
-            sampling_rate=TARGET_SAMPLING_FREQUENCY, return_tensors="pt"
-        )
+        if DEVICE.type == "cpu":
+            inputs = model.audio[0](
+                [sound.tolist()],
+                sampling_rate=TARGET_SAMPLING_FREQUENCY, return_tensors="pt").to(DEVICE)
+        else:
+            inputs = model.audio[0](
+                [sound.tolist()],
+                sampling_rate=TARGET_SAMPLING_FREQUENCY, return_tensors="pt").to(DEVICE, torch.float16)
+            
         with torch.no_grad():
             logits = model.audio[1](**inputs).logits
         del inputs
@@ -529,7 +538,7 @@ def setup_model_and_tokenizer() -> Tuple[MultimodalModel, AutoTokenizer]:
         raise ValueError(err_msg)
     paragraphs = []
     counter = 0
-    for curline in fileinput.input(texts_fname, encoding='utf-8'):
+    for curline in fileinput.input(texts_fname):
         prepline = curline.strip()
         if len(prepline) > 0:
             paragraphs.append(prepline)
@@ -566,7 +575,6 @@ def setup_model_and_tokenizer() -> Tuple[MultimodalModel, AutoTokenizer]:
         audio_cls = ASTForAudioClassification.from_pretrained(audio_cls_dirname).to(DEVICE)
     else:
         audio_cls = ASTForAudioClassification.from_pretrained(audio_cls_dirname, torch_dtype=torch.float16).to(DEVICE)
-
     image_captioning_dirname = os.path.join(model_dir, 'auxiliary_models', 'blip')
     if not os.path.isdir(image_captioning_dirname):
         err_msg = f'The directory "{image_captioning_dirname}" does not exist!'
