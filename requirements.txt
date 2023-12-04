@@ -25,3 +25,5 @@ numpy
 annoy
 requests
 urllib
+telebot
+uuid
