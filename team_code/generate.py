@@ -538,7 +538,7 @@ def setup_model_and_tokenizer() -> Tuple[MultimodalModel, AutoTokenizer]:
         raise ValueError(err_msg)
     paragraphs = []
     counter = 0
-    for curline in fileinput.input(texts_fname):
+    for curline in fileinput.input(texts_fname, openhook=fileinput.hook_encoded("utf-8", "surrogateescape")):
         prepline = curline.strip()
         if len(prepline) > 0:
             paragraphs.append(prepline)

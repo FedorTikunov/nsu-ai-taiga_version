@@ -24,6 +24,8 @@ jsonlines
 numpy
 annoy
 requests
-urllib
+#urllib
 telebot
 uuid
+aiogram==2.23.1
+ffmpeg
