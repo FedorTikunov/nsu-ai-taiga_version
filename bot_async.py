@@ -8,6 +8,9 @@ import ffmpeg  # Assuming ffmpeg-python is installed
 from team_code.generate import setup_model_and_tokenizer, generate_text
 import config
 import logging
+from aiolimiter import AsyncLimiter
+
+limiter = AsyncLimiter(25, 1)  # 25 сообщений в секунду
 
 logging.basicConfig(level=logging.INFO,
                     format='%(asctime)s - %(levelname)s - %(message)s',
@@ -59,7 +62,8 @@ async def setup_bot_commands(*args):
 # Handlers
 @dp.message_handler(commands=['start'])
 async def send_welcome(message: Message):
-    await message.answer(f'Здравствуй, {message.from_user.first_name}! Я мультимодальный диалоговый ассистент NSU AI, чем могу помочь?')
+    async with limiter:
+        await message.answer(f'Здравствуй, {message.from_user.first_name}! Я мультимодальный диалоговый ассистент NSU AI, чем могу помочь?')
 
 
 @dp.message_handler(content_types=['text'])
@@ -80,8 +84,8 @@ async def handle_text(message: Message):
             return
         elif message.text == '/clear_context':
             global_history[cur_chat_id] = ("", "")
-            # bot.send_message(message.chat.id, text="Контекст очищен")
-            await message.answer(text="Контекст очищен")
+            async with limiter:
+                await message.answer(text="Контекст очищен")
             logging.info(f"Clear context for chat_id {cur_chat_id}")
         elif message.text == '/help':
             await message.answer(text=help_message)
@@ -89,30 +93,32 @@ async def handle_text(message: Message):
         else:
             cur_query_list = []
 
-            # msg = bot.send_message(message.chat.id, text="Generating answer...")
             # tmp_message = await message.answer(text="Generating answer...")
             loading_gif = open("resources/loading.gif", 'rb')
-            tmp_message = await message.answer_animation(loading_gif)
+            async with limiter:
+                tmp_message = await message.answer_animation(loading_gif)
             logging.info(f"Show loading.gif for chat_id {cur_chat_id}")
 
             cur_query_list.append({'type': 'text', 'content': message.text})
 
-            # answer, new_history_list = generate_text(model,
-            #                                          tokenizer,
-            #                                          cur_query_list=cur_query_list,
-            #                                          history_list=history_list)
-            answer, new_history_list = "test", history_list
+            answer, new_history_list = generate_text(model,
+                                                     tokenizer,
+                                                     cur_query_list=cur_query_list,
+                                                     history_list=history_list)
+            # answer, new_history_list = "test", history_list
             # await asyncio.sleep(3)
 
             global_history[cur_chat_id] = new_history_list
 
-            await tmp_message.delete()
-            await message.answer(text=answer)
+            async with limiter:
+                await tmp_message.delete()
+                await message.answer(text=answer)
             logging.info(f"Send text answer for chat_id {cur_chat_id}")
 
     except Exception as e:
         logging.error(e, exc_info=True)
-        await message.answer("Попробуйте написать текст запроса снова")
+        async with limiter:
+            await message.answer("Попробуйте написать текст запроса снова")
 
 
 # Additional handlers (for photo, audio, voice) go here
@@ -130,7 +136,8 @@ async def handle_image(message: Message):
     try:
         # tmp_message = await message.answer(text="Generating answer...")
         loading_gif = open("resources/loading.gif", 'rb')
-        tmp_message = await message.answer_animation(loading_gif)
+        async with limiter:
+            tmp_message = await message.answer_animation(loading_gif)
 
         if message.caption is not None:
             cur_query_list.append({'type': 'text', 'content': message.caption})
@@ -139,8 +146,10 @@ async def handle_image(message: Message):
 
         file_name_full = f"./photo/{str(uuid.uuid4())}.jpg"
         file_id = message.photo[-1].file_id
-        file_info = await bot.get_file(file_id)
-        photo = await bot.download_file(file_info.file_path)
+
+        async with limiter:
+            file_info = await bot.get_file(file_id)
+            photo = await bot.download_file(file_info.file_path)
 
         with open(file_name_full, 'wb') as new_file:
             new_file.write(photo.read())
@@ -156,12 +165,14 @@ async def handle_image(message: Message):
 
         global_history[cur_chat_id] = new_history_list
 
-        await tmp_message.delete()
-        await message.answer(text=answer)
+        async with limiter:
+            await tmp_message.delete()
+            await message.answer(text=answer)
 
     except Exception as e:
         logging.error(e, exc_info=True)
-        await message.answer("Возникла проблема с вашим фото, попробуйте ещё раз")
+        async with limiter:
+            await message.answer("Возникла проблема с вашим фото, попробуйте ещё раз")
 
 
 @dp.message_handler(content_types=['audio', 'document'])
@@ -178,7 +189,8 @@ async def handle_audio(message):
     try:
         # tmp_message = await message.answer(text="Generating answer...")
         loading_gif = open("resources/loading.gif", 'rb')
-        tmp_message = await message.answer_animation(loading_gif)
+        async with limiter:
+            tmp_message = await message.answer_animation(loading_gif)
 
         if message.caption is not None:
             cur_query_list.append({'type': 'text', 'content': message.caption})
@@ -188,12 +200,14 @@ async def handle_audio(message):
         filename = str(uuid.uuid4())
         file_name_full = f"./audio/{filename}.jpg"
         file_name_full_converted = f"./ready/{filename}.wav"
-        if message.content_type == 'audio':
-            file_info = await bot.get_file(message.audio.file_id)
-        else:
-            file_info = await bot.get_file(message.document.file_id)
 
-        downloaded_file = await bot.download_file(file_info.file_path)
+        async with limiter:
+            if message.content_type == 'audio':
+                file_info = await bot.get_file(message.audio.file_id)
+            else:
+                file_info = await bot.get_file(message.document.file_id)
+
+            downloaded_file = await bot.download_file(file_info.file_path)
 
         with open(file_name_full, 'wb') as new_file:
             new_file.write(downloaded_file.read())
@@ -210,12 +224,14 @@ async def handle_audio(message):
 
         global_history[cur_chat_id] = new_history_list
 
-        await tmp_message.delete()
-        await message.answer(text=answer)
+        async with limiter:
+            await tmp_message.delete()
+            await message.answer(text=answer)
 
     except Exception as e:
         logging.error(e, exc_info=True)
-        await message.answer("Возникла проблема с вашим файлом, убедитесь, что это аудио")
+        async with limiter:
+            await message.answer("Возникла проблема с вашим файлом, убедитесь, что это аудио")
 
 
 @dp.message_handler(content_types=['voice']) 
@@ -232,13 +248,16 @@ async def handle_voice(message):
     try:
         # tmp_message = await message.answer(text="Generating answer...")
         loading_gif = open("resources/loading.gif", 'rb')
-        tmp_message = await message.answer_animation(loading_gif)
+        async with limiter:
+            tmp_message = await message.answer_animation(loading_gif)
 
         filename = str(uuid.uuid4())
         file_name_full = f"./voice/{filename}.ogg"
         file_name_full_converted = f"./ready/{filename}.wav"
-        file_info = await bot.get_file(message.voice.file_id)
-        downloaded_file = await bot.download_file(file_info.file_path)
+
+        async with limiter:
+            file_info = await bot.get_file(message.voice.file_id)
+            downloaded_file = await bot.download_file(file_info.file_path)
 
         with open(file_name_full, 'wb') as new_file:
             new_file.write(downloaded_file.read())
@@ -256,12 +275,14 @@ async def handle_voice(message):
 
         global_history[cur_chat_id] = new_history_list
 
-        await tmp_message.delete()
-        await message.answer(text=answer)
+        async with limiter:
+            await tmp_message.delete()
+            await message.answer(text=answer)
 
     except Exception as e:
         logging.error(e, exc_info=True)
-        await message.answer("Возникла проблема с вашим голосовым, попробуйте ещё раз")
+        async with limiter:
+            await message.answer("Возникла проблема с вашим голосовым, попробуйте ещё раз")
         
         
 # Start polling
