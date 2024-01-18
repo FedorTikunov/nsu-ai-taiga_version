@@ -63,7 +63,7 @@ async def setup_bot_commands(*args):
 @dp.message_handler(commands=['start'])
 async def send_welcome(message: Message):
     async with limiter:
-        await message.answer(f'Здравствуй, {message.from_user.first_name}! Я мультимодальный диалоговый ассистент NSU AI, чем могу помочь?')
+        await message.answer(f'Здравствуй, {message.from_user.first_name}! Я мультимодальный диалоговый ассистент Meno AI, чем могу помочь?')
 
 
 @dp.message_handler(content_types=['text'])

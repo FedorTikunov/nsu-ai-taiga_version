@@ -353,7 +353,7 @@ def generate_prompt_for_image(image_description: List[str]) -> str:
             elif prompt[-1] not in {'.', '?', '!'}:
                 prompt = prompt[:-1] + '.'
             counter += 1
-    return prompt + ' Please imagine that you have just looked the same.'
+    return prompt + ' Please imagine that you have just seen the same.'
 
 
 def generate_prompt_for_audio(audio_description: List[Tuple[str, bool]]) -> str:
@@ -619,7 +619,7 @@ def setup_model_and_tokenizer() -> Tuple[MultimodalModel, AutoTokenizer]:
     if DEVICE.type == "cpu":
         llm_model = AutoModelForCausalLM.from_pretrained(llm_dirname).to(DEVICE)
     else:
-        llm_model = AutoModelForCausalLM.from_pretrained(llm_dirname, torch_dtype=torch.float16).to(DEVICE)
+        llm_model = AutoModelForCausalLM.from_pretrained(llm_dirname, torch_dtype=torch.float16, device_map={"":0})
 
     llm_model.eval()
     llm_tokenizer = AutoTokenizer.from_pretrained(llm_dirname)
