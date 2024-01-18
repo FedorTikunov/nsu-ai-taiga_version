@@ -9,7 +9,7 @@ from urllib.parse import urlencode
 def download_file(public_key: str, fname: str):
     file_path = os.path.dirname(fname)
     if len(file_path) > 0:
-        if not os.path.isdir(fname):
+        if not os.path.isdir(file_path):
             raise ValueError(f'The directory "{file_path}" does not exist!')
     base_url = 'https://cloud-api.yandex.net/v1/disk/public/resources/download?'
     final_url = base_url + urlencode(dict(public_key=public_key))
