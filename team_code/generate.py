@@ -8,7 +8,7 @@ import sys
 import tempfile
 from typing import Dict, List, Tuple
 
-from transformers import LlavaForConditionalGeneration, AutoProcessor
+from llava import LlavaForConditionalGeneration, AutoProcessor
 import numpy as np
 from annoy import AnnoyIndex
 import librosa
@@ -266,7 +266,8 @@ def generate_answer_based_on_prompt(prompt: str, image_file_list: List[str], mod
     images = tokenized_text['images'] if tokenized_text['images'] else None
     del tokenized_text
     '''
-    inputs = processor(text=prompt, images=image_file_list, return_tensors="pt")
+    # TEMP!!! DO NOT USE Image.open. 
+    inputs = processor(text=prompt, images=Image.open(image_file_list[0]) if image_file_list else None, return_tensors="pt")
     '''
     batched_input_ids = torch.nn.utils.rnn.pad_sequence(
         input_ids,
