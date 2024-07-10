@@ -222,26 +222,27 @@ def find_text_by_audio(audio_fname: str, model: MultimodalModel, top_n: int = 10
         result = audio_caption + ' ' + found_texts[0]
     return ' '.join(result.split()), False
 
-
-def tokenize_prompt(prompt: str, tokenizer: AutoTokenizer, add_eos_token: bool = True,
-                    add_labels: bool=True) -> Dict[str, List[int]]:
+def tokenize_prompt(prompt: str, images: List[torch.Tensor], tokenizer: AutoTokenizer, add_eos_token: bool = True,
+                    add_labels: bool=True) -> Dict[str, Tuple[List[int], List[torch.Tensor]]]:
     result = tokenizer(prompt, padding=False, return_tensors=None)
     if (result['input_ids'][-1] != tokenizer.eos_token_id) and add_eos_token:
         result['input_ids'].append(tokenizer.eos_token_id)
         result['attention_mask'].append(1)
     if add_labels:
         result['labels'] = result['input_ids'].copy()
+    result['images'] = images
     return result
 
-
-def generate_answer_based_on_prompt(prompt: str, model: AutoModelForCausalLM, tokenizer: AutoTokenizer) -> str:
+def generate_answer_based_on_prompt(prompt: str, images: List[torch.Tensor], model: AutoModelForCausalLM, tokenizer: AutoTokenizer) -> str:
     tokenized_text = tokenize_prompt(
         prompt,
+        images,
         tokenizer,
         add_labels=False
     )
     input_ids = [torch.tensor(data=tokenized_text['input_ids'], dtype=torch.long)]
     attention_mask = [torch.tensor(data=tokenized_text['attention_mask'], dtype=torch.long)]
+    images = tokenized_text['images']
     del tokenized_text
     batched_input_ids = torch.nn.utils.rnn.pad_sequence(
         input_ids,
@@ -253,7 +254,7 @@ def generate_answer_based_on_prompt(prompt: str, model: AutoModelForCausalLM, to
     ).to(DEVICE)[:,:-1]
 
     generated_ids = model.generate(
-        input_ids=batched_input_ids, attention_mask=batched_attention_mask,
+        input_ids=batched_input_ids, attention_mask=batched_attention_mask, images=images,
         max_new_tokens=1000, do_sample=True
     )
     del batched_input_ids, batched_attention_mask
