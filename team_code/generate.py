@@ -8,7 +8,7 @@ import sys
 import tempfile
 from typing import Dict, List, Tuple
 
-from llava import LlavaForConditionalGeneration, AutoProcessor
+from transformers import LlavaForConditionalGeneration, AutoProcessor
 import numpy as np
 from annoy import AnnoyIndex
 import librosa
