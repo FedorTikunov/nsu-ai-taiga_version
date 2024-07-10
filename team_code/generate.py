@@ -223,18 +223,10 @@ def find_text_by_audio(audio_fname: str, model: MultimodalModel, top_n: int = 10
     else:
         result = audio_caption + ' ' + found_texts[0]
     return ' '.join(result.split()), False
-from typing import Dict, List, Tuple
-import torch
-from transformers import AutoTokenizer, AutoModelForCausalLM
-import os
-from PIL import Image
-from torchvision import transforms
-
+    
 def process_image(image_fname: str) -> torch.Tensor:
     if not os.path.isfile(image_fname):
-        err_msg = f'The image "{image_fname}" does not exist!'
-        conversation_logger.error(err_msg)
-        raise ValueError(err_msg)
+        return None  # Return None if the image file does not exist
     
     # Open the image file
     with Image.open(image_fname) as img:
@@ -257,7 +249,7 @@ def tokenize_prompt(prompt: str, image_file_list: List[str], tokenizer: AutoToke
         result['attention_mask'].append(1)
     if add_labels:
         result['labels'] = result['input_ids'].copy()
-    result['images'] = [process_image(image_fname) for image_fname in image_file_list]
+    result['images'] = [process_image(image_fname) for image_fname in image_file_list if process_image(image_fname) is not None]
     return result
 
 def generate_answer_based_on_prompt(prompt: str, image_file_list: List[str], model: AutoModelForCausalLM, tokenizer: AutoTokenizer) -> str:
@@ -269,7 +261,7 @@ def generate_answer_based_on_prompt(prompt: str, image_file_list: List[str], mod
     )
     input_ids = [torch.tensor(data=tokenized_text['input_ids'], dtype=torch.long)]
     attention_mask = [torch.tensor(data=tokenized_text['attention_mask'], dtype=torch.long)]
-    images = tokenized_text['images']
+    images = tokenized_text['images'] if tokenized_text['images'] else None
     del tokenized_text
     batched_input_ids = torch.nn.utils.rnn.pad_sequence(
         input_ids,
