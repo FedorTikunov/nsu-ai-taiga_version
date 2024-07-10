@@ -635,7 +635,7 @@ def setup_model_and_tokenizer() -> Tuple[MultimodalModel, AutoTokenizer]:
         raise ValueError(err_msg)
     sentence_embedder = SentenceTransformer(sbert_dirname, device=DEVICE.type)
 
-    llm_dirname = os.path.join(model_dir, 'llm')
+    llm_dirname = config.llava_weights
     if not os.path.isdir(llm_dirname):
         err_msg = f'The directory "{llm_dirname}" does not exist!'
         conversation_logger.error(err_msg)
