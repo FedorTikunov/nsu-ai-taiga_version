@@ -25,6 +25,7 @@ from transformers import pipeline
 from sentence_transformers import SentenceTransformer
 from PIL import Image
 import config
+from torchvision import transforms
 
 DEVICE = torch.device("cuda:0")
 # DEVICE = torch.device("cpu")
@@ -222,27 +223,45 @@ def find_text_by_audio(audio_fname: str, model: MultimodalModel, top_n: int = 10
     else:
         result = audio_caption + ' ' + found_texts[0]
     return ' '.join(result.split()), False
+    
+def process_image(image_fname: str) -> torch.Tensor:
+    if not os.path.isfile(image_fname):
+        return None  # Return None if the image file does not exist
+    
+    # Open the image file
+    with Image.open(image_fname) as img:
+        # Define the transformations: resize and tensor conversion
+        transform = transforms.Compose([
+            transforms.Resize((672, 672)),  # Resize to the size expected by LLaVA-NeXT
+            transforms.ToTensor(),  # Convert the PIL Image to a tensor
+        ])
+        
+        # Apply the transformations
+        image_tensor = transform(img)
+        
+    return image_tensor
 
-
-def tokenize_prompt(prompt: str, tokenizer: AutoTokenizer, add_eos_token: bool = True,
-                    add_labels: bool=True) -> Dict[str, List[int]]:
+def tokenize_prompt(prompt: str, image_file_list: List[str], tokenizer: AutoTokenizer, add_eos_token: bool = True,
+                    add_labels: bool=True) -> Dict[str, Tuple[List[int], List[torch.Tensor]]]:
     result = tokenizer(prompt, padding=False, return_tensors=None)
     if (result['input_ids'][-1] != tokenizer.eos_token_id) and add_eos_token:
         result['input_ids'].append(tokenizer.eos_token_id)
         result['attention_mask'].append(1)
     if add_labels:
         result['labels'] = result['input_ids'].copy()
+    result['images'] = [process_image(image_fname) for image_fname in image_file_list if process_image(image_fname) is not None]
     return result
 
-
-def generate_answer_based_on_prompt(prompt: str, model: AutoModelForCausalLM, tokenizer: AutoTokenizer) -> str:
+def generate_answer_based_on_prompt(prompt: str, image_file_list: List[str], model: AutoModelForCausalLM, tokenizer: AutoTokenizer) -> str:
     tokenized_text = tokenize_prompt(
         prompt,
+        image_file_list,
         tokenizer,
         add_labels=False
     )
     input_ids = [torch.tensor(data=tokenized_text['input_ids'], dtype=torch.long)]
     attention_mask = [torch.tensor(data=tokenized_text['attention_mask'], dtype=torch.long)]
+    images = tokenized_text['images'] if tokenized_text['images'] else None
     del tokenized_text
     batched_input_ids = torch.nn.utils.rnn.pad_sequence(
         input_ids,
@@ -254,7 +273,7 @@ def generate_answer_based_on_prompt(prompt: str, model: AutoModelForCausalLM, to
     ).to(DEVICE)[:,:-1]
 
     generated_ids = model.generate(
-        input_ids=batched_input_ids, attention_mask=batched_attention_mask,
+        input_ids=batched_input_ids, attention_mask=batched_attention_mask, images=images,
         max_new_tokens=1000, do_sample=True
     )
     del batched_input_ids, batched_attention_mask
@@ -275,14 +294,16 @@ def generate_answer_based_on_prompt(prompt: str, model: AutoModelForCausalLM, to
     return ' '.join(predicted_text[len(input_prompt):].split()).strip()
 
 
-def generate_logits_based_on_prompt(prompt: str, model: AutoModelForCausalLM, tokenizer: AutoTokenizer):
+def generate_logits_based_on_prompt(prompt: str, image_file_list: List[str], model: AutoModelForCausalLM, tokenizer: AutoTokenizer) -> torch.Tensor:
     tokenized_text = tokenize_prompt(
         prompt,
+        image_file_list,
         tokenizer,
         add_labels=False
     )
     input_ids = [torch.tensor(data=tokenized_text['input_ids'], dtype=torch.long)]
     attention_mask = [torch.tensor(data=tokenized_text['attention_mask'], dtype=torch.long)]
+    images = tokenized_text['images']
     del tokenized_text
     batched_input_ids = torch.nn.utils.rnn.pad_sequence(
         input_ids,
@@ -297,10 +318,12 @@ def generate_logits_based_on_prompt(prompt: str, model: AutoModelForCausalLM, to
         logits = model(
             input_ids=batched_input_ids,
             attention_mask=batched_attention_mask,
+            images=images,
             return_dict=True
         ).logits
 
     return logits.cpu().type(torch.FloatTensor)
+
 
 
 def cardinal_to_str(value: int) -> str:
@@ -612,7 +635,7 @@ def setup_model_and_tokenizer() -> Tuple[MultimodalModel, AutoTokenizer]:
         raise ValueError(err_msg)
     sentence_embedder = SentenceTransformer(sbert_dirname, device=DEVICE.type)
 
-    llm_dirname = os.path.join(model_dir, 'llm')
+    llm_dirname = config.llava_weights
     if not os.path.isdir(llm_dirname):
         err_msg = f'The directory "{llm_dirname}" does not exist!'
         conversation_logger.error(err_msg)
@@ -646,13 +669,15 @@ def setup_model_and_tokenizer() -> Tuple[MultimodalModel, AutoTokenizer]:
 def generate_text(model: MultimodalModel, tokenizer: AutoTokenizer,
                   cur_query_list: List[Dict[str, str]], history_list: Tuple[str, str]) -> Tuple[str, Tuple[str, str]]:
 
+    text_list, image_file_list, audio_file_list = parse_query(cur_query_list)
     prompt = generate_full_prompt(model, cur_query_list, history_list)
     conversation_logger.info(f'Current prompt: {prompt}')
-    answer = generate_answer_based_on_prompt(prompt, model.llm, tokenizer)
+    answer = generate_answer_based_on_prompt(prompt, image_file_list, model.llm, tokenizer)
 
     history_list = (prompt, answer)
 
     return answer, history_list
+
 
 
 def get_ppl(model: MultimodalModel, tokenizer: AutoTokenizer,
@@ -660,9 +685,10 @@ def get_ppl(model: MultimodalModel, tokenizer: AutoTokenizer,
             history_list: Tuple[str, str]) -> Tuple[float, Tuple[str, str]]:
 
     cur_query_list, text = cur_query_tuple
+    text_list, image_file_list, audio_file_list = parse_query(cur_query_list)
 
     prompt = generate_full_prompt(model, cur_query_list, history_list)
-    out_logits = generate_logits_based_on_prompt(prompt, model.llm, tokenizer)
+    out_logits = generate_logits_based_on_prompt(prompt, image_file_list, model.llm, tokenizer)
 
     dialogue_emb = tokenizer.encode(prompt, add_special_tokens=False, return_tensors="pt")
 
@@ -678,6 +704,7 @@ def get_ppl(model: MultimodalModel, tokenizer: AutoTokenizer,
     ppl = torch.exp2(neg_log_likelihood)
     
     return ppl.item(), dialogue_emb
+
 
 
 def prepare_logger():
