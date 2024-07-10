@@ -49,6 +49,7 @@ def index():
     <form action="javascript:send()" method="post">
         <input type="text" name="message" />
         <input type="submit" value="Send" />
+        <input type="image"/>
     </form>
     <textarea id="answer" cols="80" rows="20"></textarea>
 </body>
@@ -81,7 +82,7 @@ def send():
 
     logging.info(f"Received text message from chat_id {cur_chat_id}")
 
-    message = str(request.data)
+    message = request.data.decode("utf-8")
 
     try:
         if message == "Контекст очищен" or message == "Generating answer...":
