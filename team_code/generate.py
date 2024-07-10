@@ -8,6 +8,7 @@ import sys
 import tempfile
 from typing import Dict, List, Tuple
 
+from llava import LlavaForConditionalGeneration, AutoProcessor
 import numpy as np
 from annoy import AnnoyIndex
 import librosa
@@ -252,7 +253,8 @@ def tokenize_prompt(prompt: str, image_file_list: List[str], tokenizer: AutoToke
     result['images'] = [process_image(image_fname) for image_fname in image_file_list if process_image(image_fname) is not None]
     return result
 
-def generate_answer_based_on_prompt(prompt: str, image_file_list: List[str], model: AutoModelForCausalLM, tokenizer: AutoTokenizer) -> str:
+def generate_answer_based_on_prompt(prompt: str, image_file_list: List[str], model: AutoModelForCausalLM, processor: AutoProcessor) -> str:
+    '''
     tokenized_text = tokenize_prompt(
         prompt,
         image_file_list,
@@ -263,6 +265,9 @@ def generate_answer_based_on_prompt(prompt: str, image_file_list: List[str], mod
     attention_mask = [torch.tensor(data=tokenized_text['attention_mask'], dtype=torch.long)]
     images = tokenized_text['images'] if tokenized_text['images'] else None
     del tokenized_text
+    '''
+    inputs = processor(text=prompt, images=image_file_list, return_tensors="pt")
+    '''
     batched_input_ids = torch.nn.utils.rnn.pad_sequence(
         input_ids,
         batch_first=True, padding_value=0  # <unk> idx
@@ -271,30 +276,40 @@ def generate_answer_based_on_prompt(prompt: str, image_file_list: List[str], mod
         attention_mask,
         batch_first=True, padding_value=0
     ).to(DEVICE)[:,:-1]
-
+    '''
+    
+    '''
     generated_ids = model.generate(
         input_ids=batched_input_ids, attention_mask=batched_attention_mask, images=images,
         max_new_tokens=1000, do_sample=True
     )
-    del batched_input_ids, batched_attention_mask
-    predicted_text = tokenizer.batch_decode(generated_ids, skip_special_tokens=True)[0]
-    input_prompt = tokenizer.batch_decode(input_ids, skip_special_tokens=True)[0]
-    del input_ids, attention_mask, generated_ids
+    '''
+    generated_ids = model.generate(**inputs, max_new_tokens=1000, do_sample=True)
+
+    predicted_text = processor.batch_decode(generated_ids, skip_special_tokens=True, clean_up_tokenization_spaces=False)[0]
+    input_prompt = processor.decode(inputs["input_ids"][0], skip_special_tokens=True)
+    
+    #del batched_input_ids, batched_attention_mask
+    
+    #predicted_text = tokenizer.batch_decode(generated_ids, skip_special_tokens=True)[0]
+    #input_prompt = tokenizer.batch_decode(input_ids, skip_special_tokens=True)[0]
+    
+    #del input_ids, attention_mask, generated_ids
+    
     if len(predicted_text) < len(input_prompt):
         err_msg = (f'The predicted answer "{predicted_text}" does not correct, '
                    f'because it does not start with the prompt "{input_prompt}".')
-        conversation_logger.error(err_msg)
         raise ValueError(err_msg)
     if not predicted_text.startswith(input_prompt):
         err_msg = (f'The predicted answer "{predicted_text}" does not correct, '
                    f'because it does not start with the prompt "{input_prompt}".')
-        conversation_logger.error(err_msg)
         raise ValueError(err_msg)
 
     return ' '.join(predicted_text[len(input_prompt):].split()).strip()
 
 
-def generate_logits_based_on_prompt(prompt: str, image_file_list: List[str], model: AutoModelForCausalLM, tokenizer: AutoTokenizer) -> torch.Tensor:
+def generate_logits_based_on_prompt(prompt: str, image_file_list: List[str], model: AutoModelForCausalLM, processor: AutoProcessor) -> torch.Tensor:
+    '''
     tokenized_text = tokenize_prompt(
         prompt,
         image_file_list,
@@ -305,6 +320,7 @@ def generate_logits_based_on_prompt(prompt: str, image_file_list: List[str], mod
     attention_mask = [torch.tensor(data=tokenized_text['attention_mask'], dtype=torch.long)]
     images = tokenized_text['images']
     del tokenized_text
+    
     batched_input_ids = torch.nn.utils.rnn.pad_sequence(
         input_ids,
         batch_first=True, padding_value=0  # <unk> idx
@@ -321,6 +337,12 @@ def generate_logits_based_on_prompt(prompt: str, image_file_list: List[str], mod
             images=images,
             return_dict=True
         ).logits
+    '''
+    
+    inputs = processor(text=prompt, images=image_file_list, return_tensors="pt")
+
+    with torch.no_grad():
+        logits = model(**inputs, return_dict=True).logits
 
     return logits.cpu().type(torch.FloatTensor)
 
@@ -647,7 +669,7 @@ def setup_model_and_tokenizer() -> Tuple[MultimodalModel, AutoTokenizer]:
         llm_model = AutoModelForCausalLM.from_pretrained(llm_dirname, torch_dtype=torch.float16, device_map={"":0})
 
     llm_model.eval()
-    llm_tokenizer = AutoTokenizer.from_pretrained(llm_dirname)
+    llm_processor= AutoProcessor.from_pretrained(llm_dirname)
     conversation_logger.info('The large language model is loaded.')
 
     full_pipeline_for_conversation = MultimodalModel(
@@ -662,17 +684,17 @@ def setup_model_and_tokenizer() -> Tuple[MultimodalModel, AutoTokenizer]:
         llm=llm_model
     )
     gc.collect()
-    return full_pipeline_for_conversation, llm_tokenizer
+    return full_pipeline_for_conversation, llm_processor
 
 
 # Function that generates the responses for dialodues queries w.r.t. history.
-def generate_text(model: MultimodalModel, tokenizer: AutoTokenizer,
+def generate_text(model: MultimodalModel, processor: AutoProcessor,
                   cur_query_list: List[Dict[str, str]], history_list: Tuple[str, str]) -> Tuple[str, Tuple[str, str]]:
 
     text_list, image_file_list, audio_file_list = parse_query(cur_query_list)
     prompt = generate_full_prompt(model, cur_query_list, history_list)
     conversation_logger.info(f'Current prompt: {prompt}')
-    answer = generate_answer_based_on_prompt(prompt, image_file_list, model.llm, tokenizer)
+    answer = generate_answer_based_on_prompt(prompt, image_file_list, model.llm, processor)
 
     history_list = (prompt, answer)
 
@@ -680,7 +702,7 @@ def generate_text(model: MultimodalModel, tokenizer: AutoTokenizer,
 
 
 
-def get_ppl(model: MultimodalModel, tokenizer: AutoTokenizer,
+def get_ppl(model: MultimodalModel, processor: AutoProcessor,
             cur_query_tuple: Tuple[List[Dict[str, str]], str],
             history_list: Tuple[str, str]) -> Tuple[float, Tuple[str, str]]:
 
@@ -688,8 +710,24 @@ def get_ppl(model: MultimodalModel, tokenizer: AutoTokenizer,
     text_list, image_file_list, audio_file_list = parse_query(cur_query_list)
 
     prompt = generate_full_prompt(model, cur_query_list, history_list)
-    out_logits = generate_logits_based_on_prompt(prompt, image_file_list, model.llm, tokenizer)
+    
+    out_logits = generate_logits_based_on_prompt(prompt, image_file_list, model.llm, processor)
 
+    dialogue_emb = processor.encode(prompt, add_special_tokens=False, return_tensors="pt")
+
+    loss = nn.CrossEntropyLoss()
+
+    shift_logits = out_logits[..., : -1, :].contiguous()
+    labels = processor.encode(cur_query_tuple[1], add_special_tokens=False, return_tensors="pt")
+    context_before_labels = torch.LongTensor([-100] * dialogue_emb.shape[1]).unsqueeze(0)
+    labels = torch.cat([context_before_labels, labels], dim=1).to(llm.device)
+    shift_labels = labels[..., 1:].contiguous()
+    
+    neg_log_likelihood = loss(shift_logits.transpose(1, 2), shift_labels)
+    ppl = torch.exp2(neg_log_likelihood)
+    
+    return ppl.item(), dialogue_emb
+    '''
     dialogue_emb = tokenizer.encode(prompt, add_special_tokens=False, return_tensors="pt")
 
     loss = nn.CrossEntropyLoss()
@@ -704,7 +742,7 @@ def get_ppl(model: MultimodalModel, tokenizer: AutoTokenizer,
     ppl = torch.exp2(neg_log_likelihood)
     
     return ppl.item(), dialogue_emb
-
+    '''
 
 
 def prepare_logger():
