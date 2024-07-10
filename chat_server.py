@@ -1,8 +1,12 @@
 import flask
-from team_code.generate import setup_model_and_tokenizer, generate_text
-# from debug.testing import setup_model_and_tokenizer, generate_text
 import logging
 from flask import request
+import config
+
+if config.debug:
+    from debug.testing import setup_model_and_tokenizer, generate_text
+else:
+    from team_code.generate import setup_model_and_tokenizer, generate_text
 
 logging.basicConfig(level=logging.INFO,
                     format='%(asctime)s - %(levelname)s - %(message)s',
