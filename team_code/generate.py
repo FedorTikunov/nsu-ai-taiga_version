@@ -24,6 +24,7 @@ from transformers import AutoFeatureExtractor, ASTForAudioClassification
 from transformers import pipeline
 from sentence_transformers import SentenceTransformer
 from PIL import Image
+import config
 
 DEVICE = torch.device("cuda:0")
 # DEVICE = torch.device("cpu")
@@ -493,7 +494,8 @@ def setup_model_and_tokenizer() -> Tuple[MultimodalModel, AutoTokenizer]:
 
     conversation_logger.info('ONE-PEACE is attached.')
 
-    model_dir = os.path.join(os.path.dirname(__file__), 'models')
+    # model_dir = os.path.join(os.path.dirname(__file__), 'models')
+    model_dir = config.weights_path
     if not os.path.isdir(model_dir):
         err_msg = f'The directory "{model_dir}" does not exist!'
         conversation_logger.error(err_msg)
