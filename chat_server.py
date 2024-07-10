@@ -1,5 +1,6 @@
 import flask
 from team_code.generate import setup_model_and_tokenizer, generate_text
+# from debug.testing import setup_model_and_tokenizer, generate_text
 import logging
 from flask import request
 
@@ -76,16 +77,16 @@ def send():
 
     logging.info(f"Received text message from chat_id {cur_chat_id}")
 
-    message = request.body
+    message = str(request.data)
 
     try:
-        if message.text == "Контекст очищен" or message.text == "Generating answer...":
+        if message == "Контекст очищен" or message == "Generating answer...":
             return
-        elif message.text == '/clear_context':
+        elif message == '/clear_context':
             global_history[cur_chat_id] = ("", "")
             logging.info(f"Clear context for chat_id {cur_chat_id}")
             return "Контекст очищен"
-        elif message.text == '/help':
+        elif message == '/help':
             # await message.answer(text=help_message)
             logging.info(f"Show help message for chat_id {cur_chat_id}")
             return help_message
@@ -96,7 +97,7 @@ def send():
             # loading_gif = open("resources/loading.gif", 'rb')
             logging.info(f"Show loading.gif for chat_id {cur_chat_id}")
 
-            cur_query_list.append({'type': 'text', 'content': message.text})
+            cur_query_list.append({'type': 'text', 'content': message})
 
             answer, new_history_list = generate_text(model,
                                                     tokenizer,
@@ -116,3 +117,4 @@ def send():
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000)
+    # app.run(host='localhost', port=5000)
