@@ -3,6 +3,7 @@ import logging
 from flask import request
 import config
 from pathlib import Path
+from transformers import pipeline
 
 
 if config.debug:
@@ -18,6 +19,8 @@ app = flask.Flask(__name__)
 app.secret_key = 'BAD_SECRET_KEY'
 
 model, tokenizer = setup_model_and_tokenizer()
+pipe_ruen = pipeline("translation", model="/userspace/pva/weights/opusruen")
+pipe_enru = pipeline("translation", model="/userspace/pva/weights/opusenru")
 
 global_history = {}
 
@@ -104,6 +107,8 @@ def send():
     
     cur_query_list = []
 
+    is_russian = any(set("йцукенгшщзхъфывапролджэячсмитьбю") & set(message.lower()))
+
     if "file" in request.files:
         file = request.files['file']
         file_type = file.content_type.split("/")[0]
@@ -115,6 +120,8 @@ def send():
 
     message = request.form['message']
     if message:
+        if is_russian:
+            message = pipe_ruen(message)[0]['translation_text']
         cur_query_list.append({'type': 'text', 'content': message})
     
     # elif message == '/clear_context':
@@ -128,8 +135,11 @@ def send():
                                                     cur_query_list=cur_query_list,
                                                     history_list=history_list)
 
-            promt, answer = new_history_list
-            global_history[cur_chat_id] = (promt.replace("<image>", "image"), answer.replace("<image>", "image"))
+            h_promt, h_answer = new_history_list
+            global_history[cur_chat_id] = (h_promt.replace("<image>", "image"), h_answer.replace("<image>", "image"))
+
+            if is_russian:
+                answer = pipe_enru(answer)[0]['translation_text']
 
             return answer
         except Exception as e:
