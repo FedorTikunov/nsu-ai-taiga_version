@@ -277,7 +277,7 @@ def generate_answer_based_on_prompt(prompt: str, image_file_list: List[str], mod
 
     images = load_images(image_file_list)
     
-    inputs = processor(text=prompt, images=images, return_tensors="pt")
+    inputs = processor(text=prompt, images=images, return_tensors="pt").to(DEVICE)
     '''
     batched_input_ids = torch.nn.utils.rnn.pad_sequence(
         input_ids,
@@ -353,7 +353,7 @@ def generate_logits_based_on_prompt(prompt: str, image_file_list: List[str], mod
 
     images = load_images(image_file_list)
     
-    inputs = processor(text=prompt, images=images, return_tensors="pt")
+    inputs = processor(text=prompt, images=images, return_tensors="pt").to(DEVICE)
 
     with torch.no_grad():
         logits = model(**inputs, return_dict=True).logits
