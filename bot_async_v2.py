@@ -32,6 +32,7 @@ async def on_message(message: Message):
                                                 tokenizer,
                                                 cur_query_list=cur_query_list,
                                                 history_list=history_list)
+        global_history[chat_id] = new_history_list
         await message.answer(text=answer)
     else:
         await message.answer(text="Ничего не написано")
