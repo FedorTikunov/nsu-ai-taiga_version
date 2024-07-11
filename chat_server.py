@@ -128,7 +128,8 @@ def send():
                                                     cur_query_list=cur_query_list,
                                                     history_list=history_list)
 
-            global_history[cur_chat_id] = new_history_list.replace("<image>", "image")
+            promt, answer = new_history_list
+            global_history[cur_chat_id] = (promt.replace("<image>", "image"), answer.replace("<image>", "image"))
 
             return answer
         except Exception as e:
