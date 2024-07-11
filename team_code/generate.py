@@ -396,7 +396,7 @@ def generate_prompt_for_image(image_description: List[str]) -> str:
     if len(image_description) < 1:
         return ''
     if len(image_description) == 1:
-        prompt = (f'I have just looked at an image that probably corresponds to '
+        prompt = (f'I have just looked at an <image> that probably corresponds to '
                   f'the following text description. {image_description[0]}')
         if prompt[-1] not in PUNCTUATION:
             prompt += '.'
@@ -406,7 +406,7 @@ def generate_prompt_for_image(image_description: List[str]) -> str:
         prompt = f'I have just looked at {cardinal_to_str(len(image_description))} images.'
         counter = 1
         for it in image_description:
-            prompt += (f' The {ordinal_to_str(counter)} image probably corresponds to '
+            prompt += (f' The {ordinal_to_str(counter)} <image> probably corresponds to '
                        f'the following text description. {it}')
             if prompt[-1] not in PUNCTUATION:
                 prompt += '.'
