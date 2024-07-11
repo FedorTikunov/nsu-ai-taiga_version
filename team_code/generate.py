@@ -8,7 +8,7 @@ import sys
 import tempfile
 from typing import Dict, List, Tuple
 
-from llava import LlavaForConditionalGeneration, AutoProcessor
+from transformers import LlavaForConditionalGeneration, AutoProcessor
 import numpy as np
 from annoy import AnnoyIndex
 import librosa
@@ -244,6 +244,9 @@ def process_image(image_fname: str) -> torch.Tensor:
 
 
 def load_images(image_file_list: List[str]) -> List[np.ndarray]:
+    
+    if not image_file_list:
+        return None
     return [np.array(Image.open(file)) for file in image_file_list]
 
 def tokenize_prompt(prompt: str, image_file_list: List[str], tokenizer: AutoTokenizer, add_eos_token: bool = True,
