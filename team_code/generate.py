@@ -8,7 +8,7 @@ import sys
 import tempfile
 from typing import Dict, List, Tuple
 
-from transformers import LlavaForConditionalGeneration, AutoProcessor
+from transformers import LlavaForConditionalGeneration, LlavaNextProcessor
 import numpy as np
 from annoy import AnnoyIndex
 import librosa
@@ -19,7 +19,7 @@ from pydub import AudioSegment
 from pydub.exceptions import CouldntDecodeError
 import torch
 import torch.nn as nn
-from transformers import AutoModelForCausalLM, AutoTokenizer
+from transformers import AutoTokenizer
 from transformers import BlipProcessor, BlipForConditionalGeneration
 from transformers import AutoFeatureExtractor, ASTForAudioClassification
 from transformers import pipeline
@@ -260,7 +260,7 @@ def tokenize_prompt(prompt: str, image_file_list: List[str], tokenizer: AutoToke
     result['images'] = [process_image(image_fname) for image_fname in image_file_list if process_image(image_fname) is not None]
     return result
 
-def generate_answer_based_on_prompt(prompt: str, image_file_list: List[str], model: AutoModelForCausalLM, processor: AutoProcessor) -> str:
+def generate_answer_based_on_prompt(prompt: str, image_file_list: List[str], model: LlavaForConditionalGeneration, processor: LlavaNextProcessor) -> str:
     '''
     tokenized_text = tokenize_prompt(
         prompt,
@@ -320,7 +320,7 @@ def generate_answer_based_on_prompt(prompt: str, image_file_list: List[str], mod
     return ' '.join(predicted_text[len(input_prompt):].split()).strip()
 
 
-def generate_logits_based_on_prompt(prompt: str, image_file_list: List[str], model: AutoModelForCausalLM, processor: AutoProcessor) -> torch.Tensor:
+def generate_logits_based_on_prompt(prompt: str, image_file_list: List[str], model: LlavaForConditionalGeneration, processor: LlavaNextProcessor) -> torch.Tensor:
     '''
     tokenized_text = tokenize_prompt(
         prompt,
@@ -678,12 +678,12 @@ def setup_model_and_tokenizer() -> Tuple[MultimodalModel, AutoTokenizer]:
         raise ValueError(err_msg)
 
     if DEVICE.type == "cpu":
-        llm_model = AutoModelForCausalLM.from_pretrained(llm_dirname).to(DEVICE)
+        llm_model = LlavaForConditionalGeneration.from_pretrained(llm_dirname).to(DEVICE)
     else:
-        llm_model = AutoModelForCausalLM.from_pretrained(llm_dirname, torch_dtype=torch.float16, device_map={"":0})
+        llm_model = LlavaForConditionalGeneration.from_pretrained(llm_dirname, torch_dtype=torch.float16, device_map={"":0})
 
     llm_model.eval()
-    llm_processor= AutoProcessor.from_pretrained(llm_dirname)
+    llm_processor= LlavaNextProcessor.from_pretrained(llm_dirname)
     conversation_logger.info('The large language model is loaded.')
 
     full_pipeline_for_conversation = MultimodalModel(
@@ -702,7 +702,7 @@ def setup_model_and_tokenizer() -> Tuple[MultimodalModel, AutoTokenizer]:
 
 
 # Function that generates the responses for dialodues queries w.r.t. history.
-def generate_text(model: MultimodalModel, processor: AutoProcessor,
+def generate_text(model: MultimodalModel, processor: LlavaNextProcessor,
                   cur_query_list: List[Dict[str, str]], history_list: Tuple[str, str]) -> Tuple[str, Tuple[str, str]]:
 
     text_list, image_file_list, audio_file_list = parse_query(cur_query_list)
@@ -716,7 +716,7 @@ def generate_text(model: MultimodalModel, processor: AutoProcessor,
 
 
 
-def get_ppl(model: MultimodalModel, processor: AutoProcessor,
+def get_ppl(model: MultimodalModel, processor: LlavaNextProcessor,
             cur_query_tuple: Tuple[List[Dict[str, str]], str],
             history_list: Tuple[str, str]) -> Tuple[float, Tuple[str, str]]:
 
