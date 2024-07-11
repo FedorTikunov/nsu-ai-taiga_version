@@ -242,6 +242,10 @@ def process_image(image_fname: str) -> torch.Tensor:
         
     return image_tensor
 
+
+def load_images(image_file_list: List[str]) -> List[np.ndarray]:
+    return [np.array(Image.open(file)) for file in image_file_list]
+
 def tokenize_prompt(prompt: str, image_file_list: List[str], tokenizer: AutoTokenizer, add_eos_token: bool = True,
                     add_labels: bool=True) -> Dict[str, Tuple[List[int], List[torch.Tensor]]]:
     result = tokenizer(prompt, padding=False, return_tensors=None)
@@ -267,7 +271,10 @@ def generate_answer_based_on_prompt(prompt: str, image_file_list: List[str], mod
     del tokenized_text
     '''
     # TEMP!!! DO NOT USE Image.open. 
-    inputs = processor(text=prompt, images=Image.open(image_file_list[0]) if image_file_list else None, return_tensors="pt")
+
+    images = load_images(image_file_list)
+    
+    inputs = processor(text=prompt, images=images, return_tensors="pt")
     '''
     batched_input_ids = torch.nn.utils.rnn.pad_sequence(
         input_ids,
@@ -285,6 +292,7 @@ def generate_answer_based_on_prompt(prompt: str, image_file_list: List[str], mod
         max_new_tokens=1000, do_sample=True
     )
     '''
+    
     generated_ids = model.generate(**inputs, max_new_tokens=1000, do_sample=True)
 
     predicted_text = processor.batch_decode(generated_ids, skip_special_tokens=True, clean_up_tokenization_spaces=False)[0]
@@ -339,8 +347,10 @@ def generate_logits_based_on_prompt(prompt: str, image_file_list: List[str], mod
             return_dict=True
         ).logits
     '''
+
+    images = load_images(image_file_list)
     
-    inputs = processor(text=prompt, images=image_file_list, return_tensors="pt")
+    inputs = processor(text=prompt, images=images, return_tensors="pt")
 
     with torch.no_grad():
         logits = model(**inputs, return_dict=True).logits
