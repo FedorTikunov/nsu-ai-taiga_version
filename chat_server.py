@@ -107,7 +107,6 @@ def send():
     
     cur_query_list = []
 
-    is_russian = any(set("йцукенгшщзхъфывапролджэячсмитьбю") & set(message.lower()))
 
     if "file" in request.files:
         file = request.files['file']
@@ -119,6 +118,7 @@ def send():
         cur_query_list.append({'type': file_type, 'content': file_path.absolute()})
 
     message = request.form['message']
+    is_russian = any(set("йцукенгшщзхъфывапролджэячсмитьбю") & set(message.lower()))
     if message:
         if is_russian:
             message = pipe_ruen(message)[0]['translation_text']
