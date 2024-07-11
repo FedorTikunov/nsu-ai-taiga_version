@@ -520,11 +520,12 @@ def generate_full_prompt(model: MultimodalModel,
                 new_prompt = previous_dialogue
     image_descriptions = [find_text_by_image(cur, model, search_k=search_k) for cur in image_file_list]
     audio_descriptions = [find_text_by_audio(cur, model, search_k=search_k) for cur in audio_file_list]
-    del image_file_list, audio_file_list
+    del audio_file_list
     if len(image_descriptions) > 0:
         new_prompt += (' ' + generate_prompt_for_image(image_descriptions))
     if len(audio_descriptions) > 0:
         new_prompt += (' ' + generate_prompt_for_audio(audio_descriptions))
+    new_prompt += "<image>\n" * len(image_file_list)
     for cur_text in text_list:
         new_prompt += (' ' + cur_text)
     del text_list
