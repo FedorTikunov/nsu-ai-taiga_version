@@ -243,7 +243,7 @@ def process_image(image_fname: str) -> torch.Tensor:
     return image_tensor
 
 
-def load_images(image_file_list: List[str]) -> List[np.ndarray]:
+def load_images(image_file_list: List[str]):
     
     if not image_file_list:
         return None
