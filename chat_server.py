@@ -65,6 +65,7 @@ def index():
         <textarea name="message" cols="80"></textarea><br>
         <input type="file" id="file" name="file"/><br>
         <input type="submit" value="Send" /><br>
+        <input type="hidden" name="chat_id" value="chat1" />
     </form>
     <textarea id="answer" cols="80" rows="20"></textarea>
 </body>
@@ -88,7 +89,11 @@ help_message = """Ты правда не разобрался в двух кно
 def send():
     global global_history
 
-    cur_chat_id = "chat1"
+    if "chat_id" in request.form:
+        cur_chat_id = request.form['chat_id']
+    else:
+        cur_chat_id = "chat1"
+
     if cur_chat_id in global_history:
         history_list = global_history[cur_chat_id]
     else:
@@ -123,7 +128,7 @@ def send():
                                                     cur_query_list=cur_query_list,
                                                     history_list=history_list)
 
-            global_history[cur_chat_id] = new_history_list
+            global_history[cur_chat_id] = new_history_list.replace("<image>", "image")
 
             return answer
         except Exception as e:
