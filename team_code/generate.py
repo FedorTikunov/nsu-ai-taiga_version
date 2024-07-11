@@ -8,7 +8,7 @@ import sys
 import tempfile
 from typing import Dict, List, Tuple
 
-from transformers import LlavaForConditionalGeneration, LlavaNextProcessor
+from transformers import LlavaNextForConditionalGeneration, LlavaNextProcessor
 import numpy as np
 from annoy import AnnoyIndex
 import librosa
@@ -260,7 +260,7 @@ def tokenize_prompt(prompt: str, image_file_list: List[str], tokenizer: AutoToke
     result['images'] = [process_image(image_fname) for image_fname in image_file_list if process_image(image_fname) is not None]
     return result
 
-def generate_answer_based_on_prompt(prompt: str, image_file_list: List[str], model: LlavaForConditionalGeneration, processor: LlavaNextProcessor) -> str:
+def generate_answer_based_on_prompt(prompt: str, image_file_list: List[str], model: LlavaNextForConditionalGeneration, processor: LlavaNextProcessor) -> str:
     '''
     tokenized_text = tokenize_prompt(
         prompt,
@@ -320,7 +320,7 @@ def generate_answer_based_on_prompt(prompt: str, image_file_list: List[str], mod
     return ' '.join(predicted_text[len(input_prompt):].split()).strip()
 
 
-def generate_logits_based_on_prompt(prompt: str, image_file_list: List[str], model: LlavaForConditionalGeneration, processor: LlavaNextProcessor) -> torch.Tensor:
+def generate_logits_based_on_prompt(prompt: str, image_file_list: List[str], model: LlavaNextForConditionalGeneration, processor: LlavaNextProcessor) -> torch.Tensor:
     '''
     tokenized_text = tokenize_prompt(
         prompt,
@@ -525,7 +525,6 @@ def generate_full_prompt(model: MultimodalModel,
         new_prompt += (' ' + generate_prompt_for_image(image_descriptions))
     if len(audio_descriptions) > 0:
         new_prompt += (' ' + generate_prompt_for_audio(audio_descriptions))
-    new_prompt += "<image>\n" * len(image_file_list)
     for cur_text in text_list:
         new_prompt += (' ' + cur_text)
     del text_list
@@ -679,9 +678,9 @@ def setup_model_and_tokenizer() -> Tuple[MultimodalModel, AutoTokenizer]:
         raise ValueError(err_msg)
 
     if DEVICE.type == "cpu":
-        llm_model = LlavaForConditionalGeneration.from_pretrained(llm_dirname).to(DEVICE)
+        llm_model = LlavaNextForConditionalGeneration.from_pretrained(llm_dirname).to(DEVICE)
     else:
-        llm_model = LlavaForConditionalGeneration.from_pretrained(llm_dirname, torch_dtype=torch.float16, device_map={"":0})
+        llm_model = LlavaNextForConditionalGeneration.from_pretrained(llm_dirname, torch_dtype=torch.float16, device_map={"":0})
 
     llm_model.eval()
     llm_processor= LlavaNextProcessor.from_pretrained(llm_dirname)
