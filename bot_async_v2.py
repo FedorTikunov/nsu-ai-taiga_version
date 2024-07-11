@@ -17,7 +17,7 @@ async def on_message(message: Message):
     if message.text:
         http_form['message'] = message.text
     
-    resp = requests.post(config.llava_url, data=http_form)
+    resp = requests.post("http://localhost:8888/send", data=http_form)
 
     await message.answer(text=resp.text)
 
