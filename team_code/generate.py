@@ -174,6 +174,10 @@ def find_long_text_similar_to_short_text(short_text: str, long_texts: List[str],
 def extract_text_with_trocr(image_fname: str, model: MultimodalModel) -> str:
     # Load the image
     image = Image.open(image_fname)
+
+    if len(image.shape) == 2:
+        image = image.convert("RGB")
+    
     
     # Process the image
     pixel_values = model.ocr[0](image, return_tensors="pt").pixel_values
