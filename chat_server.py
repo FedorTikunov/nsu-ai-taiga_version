@@ -7,7 +7,13 @@ from pathlib import Path
 
 if config.debug:
     from debug.testing import setup_model_and_tokenizer, generate_text
+
+    def pipeline(*args, **kwargs):
+        def wrapper(text):
+            return [{"translation_text": text}]
+        return wrapper
 else:
+    from transformers import pipeline
     from team_code.generate import setup_model_and_tokenizer, generate_text
 
 logging.basicConfig(level=logging.INFO,
@@ -18,6 +24,8 @@ app = flask.Flask(__name__)
 app.secret_key = 'BAD_SECRET_KEY'
 
 model, tokenizer = setup_model_and_tokenizer()
+pipe_ruen = pipeline("translation", model="/userspace/pva/weights/opusruen")
+pipe_enru = pipeline("translation", model="/userspace/pva/weights/opusenru")
 
 global_history = {}
 
@@ -104,23 +112,28 @@ def send():
     
     cur_query_list = []
 
-    if "file" in request.files:
-        file = request.files['file']
-        file_type = file.content_type.split("/")[0]
-        file_path = PHOTO_DIR / file.filename
-        file.save(file_path)
+    for key, f_obj in request.files.items():
+        file_type = f_obj.content_type.split("/")[0]
+        file_path = PHOTO_DIR / f_obj.filename
+        f_obj.save(file_path)
 
         # BUGMAYBE: file_type not the same as js content_type
         cur_query_list.append({'type': file_type, 'content': file_path.absolute()})
 
-    message = request.form['message']
-    if message:
-        cur_query_list.append({'type': 'text', 'content': message})
+    is_russian = False
+    if "message" in request.form:
+        message = request.form['message']
+        is_russian = any(set("йцукенгшщзхъфывапролджэячсмитьбю") & set(message.lower()))
+        if message:
+            if is_russian:
+                message = pipe_ruen(message)[0]['translation_text']
+            cur_query_list.append({'type': 'text', 'content': message})
     
     # elif message == '/clear_context':
     #     global_history[cur_chat_id] = ("", "")
     #     logging.info(f"Clear context for chat_id {cur_chat_id}")
     #     return "Контекст очищен"
+    print(cur_query_list)
     if cur_query_list:
         try:
             answer, new_history_list = generate_text(model,
