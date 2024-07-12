@@ -718,8 +718,8 @@ def setup_model_and_tokenizer() -> Tuple[MultimodalModel, AutoTokenizer]:
     else:
         trocr_model = VisionEncoderDecoderModel.from_pretrained(config.weights_ocr, torch_dtype=torch.float16).to(DEVICE)
     conversation_logger.info('The Ocr model is loaded.')
-    translate_ruen = pipeline("translation", model="/userspace/pva/weights/opusruen", device=DEVICE),
-    translate_enru = pipeline("translation", model="/userspace/pva/weights/opusenru", device=DEVICE),
+    translate_ruen = pipeline("translation", model="/userspace/pva/weights/opusruen", device=DEVICE)
+    translate_enru = pipeline("translation", model="/userspace/pva/weights/opusenru", device=DEVICE)
     conversation_logger.info('The Translation models are loaded.')
 
     full_pipeline_for_conversation = MultimodalModel(
