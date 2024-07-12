@@ -6,3 +6,4 @@ flask_debug = False
 weights_ruen = "/userspace/pva/weights/opusruen"
 weights_enru = "/userspace/pva/weights/opusenru"
 weights_ocr = "/userspace/pva/weights/ocr"
+weights_whisper = "/userspace/pva/weights/whisper-medium"

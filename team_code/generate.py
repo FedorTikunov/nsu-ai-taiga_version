@@ -676,14 +676,14 @@ def setup_model_and_tokenizer() -> Tuple[MultimodalModel, AutoTokenizer]:
             torch_dtype=torch.float16
         ).to(DEVICE)
 
-    asr_dirname = os.path.join(model_dir, 'auxiliary_models', 'whisper_medium')
-    if not os.path.isdir(asr_dirname):
-        err_msg = f'The directory "{asr_dirname}" does not exist!'
-        conversation_logger.error(err_msg)
-        raise ValueError(err_msg)
+    # asr_dirname = os.path.join(model_dir, 'auxiliary_models', 'whisper_medium')
+    # if not os.path.isdir(asr_dirname):
+    #     err_msg = f'The directory "{asr_dirname}" does not exist!'
+    #     conversation_logger.error(err_msg)
+    #     raise ValueError(err_msg)
     asr_pipe = pipeline(
         'automatic-speech-recognition',
-        model=asr_dirname,
+        model=config.weights_whisper,
         chunk_length_s=30,
         device=DEVICE
     )
