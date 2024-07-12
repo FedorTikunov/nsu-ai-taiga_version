@@ -135,6 +135,16 @@ def send():
     else:
         return "В запросе ничего нет"
 
+@app.route("/clear_context", methods=['POST'])
+def clear_context():
+    global global_history
+    if "chat_id" in request.form:
+        cur_chat_id = request.form['chat_id']
+    else:
+        cur_chat_id = "chat1"
+    global_history[cur_chat_id] = ("", "")
+    return "Контекст очищен"
+
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=config.flask_debug)

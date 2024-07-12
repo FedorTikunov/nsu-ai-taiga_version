@@ -1,5 +1,6 @@
 from aiogram import Bot, Dispatcher
 from aiogram.types import BotCommand, Message
+from aiogram.filters import Command
 import config
 import asyncio
 import requests
@@ -8,6 +9,11 @@ import sys
 
 bot = Bot(token=os.getenv('BOT_TOKEN'))
 dp = Dispatcher()
+
+@dp.message(Command(commands=['clean']))
+async def on_clean(message: Message):
+    ans = requests.post(f"{sys.argv[1]}/clear_context", json={"chat_id": message.chat.id})
+    await message.answer(ans.text)
 
 @dp.message()
 async def on_message(message: Message):
@@ -39,7 +45,7 @@ async def on_message(message: Message):
         file = await bot.download_file(file.file_path)
         form_files[doc.file_unique_id] = (doc.file_name, file, doc.mime_type)
     
-    resp = requests.post(sys.argv[1], data=http_form, files=form_files)
+    resp = requests.post(f"{sys.argv[1]}/send", data=http_form, files=form_files)
 
     await message.answer(text=resp.text)
     # await message.answer(text=resp.text)
