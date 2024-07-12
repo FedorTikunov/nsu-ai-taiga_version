@@ -18,6 +18,8 @@ async def on_message(message: Message):
 
     if message.text:
         http_form['message'] = message.text
+    elif message.caption:
+        http_form['message'] = message.caption
     # file_id: (file_size)
 
     photos = {}
