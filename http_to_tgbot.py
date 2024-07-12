@@ -2,10 +2,11 @@ from aiogram import Bot, Dispatcher
 from aiogram.types import BotCommand, Message
 import config
 import asyncio
-import config
 import requests
+import os
+import sys
 
-bot = Bot(token=config.token)
+bot = Bot(token=os.getenv('BOT_TOKEN'))
 dp = Dispatcher()
 
 @dp.message()
@@ -41,9 +42,9 @@ async def on_message(message: Message):
         file = await bot.download_file(file.file_path)
         form_files[doc.file_unique_id] = (doc.file_name, file, doc.mime_type)
     
-    resp = requests.post("http://localhost:5000/send", data=http_form, files=form_files)
+    resp = requests.post(sys.argv[1], data=http_form, files=form_files)
 
-    await message.answer(text="got it!")
+    await message.answer(text=resp.text)
     # await message.answer(text=resp.text)
 
 if __name__ == '__main__':
