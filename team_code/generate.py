@@ -746,10 +746,10 @@ def generate_text(model: MultimodalModel, processor: LlavaNextProcessor,
 
     text_list, image_file_list, audio_file_list = parse_query(cur_query_list)
     is_russian = any(any(set("йцукенгшщзхъфывапролджэячсмитьбю") & set(text.lower())) for text in text_list)
+    if is_russian:
+        text_list = [model.translate_ruen(text)[0]['translation_text'] for text in text_list]
     prompt = generate_full_prompt(model, cur_query_list, history_list)
     conversation_logger.info(f'Current prompt: {prompt}')
-    prompt = model.translate_ruen(prompt)[0]['translation_text']
-    conversation_logger.info(f'Current translated: {prompt}')
     answer = generate_answer_based_on_prompt(prompt, image_file_list, model.llm, processor)
 
     answer = answer.replace("<image>", "image")
