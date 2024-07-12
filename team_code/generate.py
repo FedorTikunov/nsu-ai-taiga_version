@@ -175,8 +175,7 @@ def extract_text_with_trocr(image_fname: str, model: MultimodalModel) -> str:
     # Load the image
     image = Image.open(image_fname)
 
-    if len(image.shape) == 2:
-        image = image.convert("RGB")
+    image = image.convert("RGB")
     
     
     # Process the image
