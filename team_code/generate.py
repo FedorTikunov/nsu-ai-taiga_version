@@ -756,6 +756,7 @@ def generate_text(model: MultimodalModel, processor: LlavaNextProcessor,
     prompt = generate_full_prompt(model, cur_query_list, history_list)
     conversation_logger.info(f'Current prompt: {prompt}')
     answer = generate_answer_based_on_prompt(prompt, image_file_list, model.llm, processor)
+    conversation_logger.info(f'Answer: {answer}')
 
     answer = answer.replace("<image>", "image")
     prompt = prompt.replace("<image>", "image")
