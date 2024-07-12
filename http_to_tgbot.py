@@ -20,11 +20,6 @@ async def on_message(message: Message):
         http_form['message'] = message.text
     # file_id: (file_size)
 
-    print(message.audio)
-    print(message.photo)
-    print(message.document)
-    print("---")
-
     photos = {}
     if message.photo:
         for photo in message.photo:
