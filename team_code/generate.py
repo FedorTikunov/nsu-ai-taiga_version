@@ -7,7 +7,7 @@ import os
 import sys
 import tempfile
 from typing import Dict, List, Tuple
-
+from transformers import TrOCRProcessor, VisionEncoderDecoderModel
 from transformers import LlavaNextForConditionalGeneration, LlavaNextProcessor
 import numpy as np
 from annoy import AnnoyIndex
@@ -171,6 +171,19 @@ def find_long_text_similar_to_short_text(short_text: str, long_texts: List[str],
     found_idx = sentences_with_distances[0][0]
     return long_texts[found_idx]
 
+def extract_text_with_trocr(image_fname: str, model: MultimodalModel) -> str:
+    # Load the image
+    image = Image.open(image_fname)
+    
+    # Process the image
+    pixel_values = model.ocr[0](image, return_tensors="pt").pixel_values
+    generated_ids = model.ocr[1].generate(pixel_values)
+
+    # Generate text
+    text = model.ocr[0].batch_decode(outputs, skip_special_tokens=True)[0]
+
+    return text
+
 
 def find_text_by_image(image_fname: str, model: MultimodalModel, top_n: int = 100, search_k: int = -1) -> str:
     if not os.path.isfile(image_fname):
@@ -178,6 +191,9 @@ def find_text_by_image(image_fname: str, model: MultimodalModel, top_n: int = 10
         conversation_logger.error(err_msg)
         raise ValueError(err_msg)
     image_caption = generate_image_caption(image_fname, model)
+
+    trocr_text = extract_text_with_trocr(image_fname, model)
+    
     src_images = model.one_peace.process_image([image_fname])
     with torch.no_grad():
         image_features = model.one_peace.extract_image_features(src_images)
@@ -192,6 +208,10 @@ def find_text_by_image(image_fname: str, model: MultimodalModel, top_n: int = 10
         result = image_caption + ' ' + find_long_text_similar_to_short_text(image_caption, found_texts, model)
     else:
         result = image_caption + ' ' + found_texts[0]
+
+    if len(trocr_text) > 1:
+        result = result + ' Image has such text: ' + '"' + trocr_text + '"'
+    
     return ' '.join(result.split())
 
 
@@ -686,6 +706,18 @@ def setup_model_and_tokenizer() -> Tuple[MultimodalModel, AutoTokenizer]:
     llm_processor= LlavaNextProcessor.from_pretrained(llm_dirname)
     conversation_logger.info('The large language model is loaded.')
 
+    # Load TrOCR model and processor
+    if not os.path.isdir(model_dir):
+        err_msg = f'The directory "{model_dir}" does not exist!'
+        conversation_logger.error(err_msg)
+        raise ValueError(err_msg)
+    trocr_processor = TrOCRProcessor.from_pretrained(model_dir)
+    if DEVICE.type == "cpu":
+        trocr_model = VisionEncoderDecoderModel.from_pretrained(model_dir).to(DEVICE)
+    else:
+        trocr_model = VisionEncoderDecoderModel.from_pretrained(trocr_model_dir, torch_dtype=torch.float16).to(DEVICE)
+    conversation_logger.info('The Ocr model is loaded.')
+
     full_pipeline_for_conversation = MultimodalModel(
         image=(image_processor, image_caption_generator),
         audio=(audio_fe, audio_cls),
@@ -695,6 +727,7 @@ def setup_model_and_tokenizer() -> Tuple[MultimodalModel, AutoTokenizer]:
         pca=pca,
         annoy_index=annoy_index,
         texts=paragraphs,
+        ocr=(trocr_processor, trocr_model),
         llm=llm_model
     )
     gc.collect()
