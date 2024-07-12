@@ -34,7 +34,7 @@ TARGET_SAMPLING_FREQUENCY = 16_000
 
 MultimodalModel = namedtuple(
     'MultimodalModel',
-    'image audio speech sbert one_peace pca annoy_index texts llm translate_ruen translate_enru'
+    'image audio speech sbert one_peace pca annoy_index texts ocr llm translate_ruen translate_enru'
 )
 conversation_logger = logging.getLogger(__name__)
 PUNCTUATION = {'.', '?', '!', ':', '-', ';'}
