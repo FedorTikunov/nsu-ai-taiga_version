@@ -711,12 +711,15 @@ def setup_model_and_tokenizer() -> Tuple[MultimodalModel, AutoTokenizer]:
         err_msg = f'The directory "{model_dir}" does not exist!'
         conversation_logger.error(err_msg)
         raise ValueError(err_msg)
-    trocr_processor = TrOCRProcessor.from_pretrained(model_dir)
+    trocr_processor = TrOCRProcessor.from_pretrained(config.weights_ocr)
     if DEVICE.type == "cpu":
-        trocr_model = VisionEncoderDecoderModel.from_pretrained(model_dir).to(DEVICE)
+        trocr_model = VisionEncoderDecoderModel.from_pretrained(config.weights_ocr).to(DEVICE)
     else:
-        trocr_model = VisionEncoderDecoderModel.from_pretrained(trocr_model_dir, torch_dtype=torch.float16).to(DEVICE)
+        trocr_model = VisionEncoderDecoderModel.from_pretrained(config.weights_ocr, torch_dtype=torch.float16).to(DEVICE)
     conversation_logger.info('The Ocr model is loaded.')
+    translate_ruen = pipeline("translation", model="/userspace/pva/weights/opusruen", device=DEVICE),
+    translate_enru = pipeline("translation", model="/userspace/pva/weights/opusenru", device=DEVICE),
+    conversation_logger.info('The Translation models are loaded.')
 
     full_pipeline_for_conversation = MultimodalModel(
         image=(image_processor, image_caption_generator),
@@ -729,8 +732,8 @@ def setup_model_and_tokenizer() -> Tuple[MultimodalModel, AutoTokenizer]:
         texts=paragraphs,
         ocr=(trocr_processor, trocr_model),
         llm=llm_model,
-        translate_ruen=pipeline("translation", model="/userspace/pva/weights/opusruen", device=DEVICE),
-        translate_enru=pipeline("translation", model="/userspace/pva/weights/opusenru", device=DEVICE),
+        translate_ruen=translate_ruen,
+        translate_enru=translate_enru,
     )
     gc.collect()
     return full_pipeline_for_conversation, llm_processor
