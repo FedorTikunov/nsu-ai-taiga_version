@@ -34,7 +34,7 @@ TARGET_SAMPLING_FREQUENCY = 16_000
 
 MultimodalModel = namedtuple(
     'MultimodalModel',
-    'image audio speech sbert one_peace pca annoy_index texts llm'
+    'image audio speech sbert one_peace pca annoy_index texts llm translate_ruen translate_enru'
 )
 conversation_logger = logging.getLogger(__name__)
 PUNCTUATION = {'.', '?', '!', ':', '-', ';'}
@@ -728,7 +728,9 @@ def setup_model_and_tokenizer() -> Tuple[MultimodalModel, AutoTokenizer]:
         annoy_index=annoy_index,
         texts=paragraphs,
         ocr=(trocr_processor, trocr_model),
-        llm=llm_model
+        llm=llm_model,
+        translate_ruen=pipeline("translation", model="/userspace/pva/weights/opusruen", device=DEVICE),
+        translate_enru=pipeline("translation", model="/userspace/pva/weights/opusenru", device=DEVICE),
     )
     gc.collect()
     return full_pipeline_for_conversation, llm_processor
@@ -739,13 +741,23 @@ def generate_text(model: MultimodalModel, processor: LlavaNextProcessor,
                   cur_query_list: List[Dict[str, str]], history_list: Tuple[str, str]) -> Tuple[str, Tuple[str, str]]:
 
     text_list, image_file_list, audio_file_list = parse_query(cur_query_list)
+    is_russian = any(any(set("йцукенгшщзхъфывапролджэячсмитьбю") & set(text.lower())) for text in text_list)
+    if is_russian:
+        text_list = [model.translate_ruen(text)[0]['translation_text'] for text in text_list]
     prompt = generate_full_prompt(model, cur_query_list, history_list)
     conversation_logger.info(f'Current prompt: {prompt}')
     answer = generate_answer_based_on_prompt(prompt, image_file_list, model.llm, processor)
 
+    answer = answer.replace("<image>", "image")
+
+    if is_russian:
+        ret_answer = model.translate_enru(answer)[0]['translation_text']
+    else:
+        ret_answer = answer
+
     history_list = (prompt, answer)
 
-    return answer, history_list
+    return ret_answer, history_list
 
 
 

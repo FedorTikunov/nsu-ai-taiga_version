@@ -3,18 +3,11 @@ import logging
 from flask import request
 import config
 from pathlib import Path
-from transformers import pipeline
 
 
 if config.debug:
     from debug.testing import setup_model_and_tokenizer, generate_text
-
-    def pipeline(*args, **kwargs):
-        def wrapper(text):
-            return [{"translation_text": text}]
-        return wrapper
 else:
-    from transformers import pipeline
     from team_code.generate import setup_model_and_tokenizer, generate_text
 
 logging.basicConfig(level=logging.INFO,
@@ -25,8 +18,6 @@ app = flask.Flask(__name__)
 app.secret_key = 'BAD_SECRET_KEY'
 
 model, tokenizer = setup_model_and_tokenizer()
-pipe_ruen = pipeline("translation", model="/userspace/pva/weights/opusruen")
-pipe_enru = pipeline("translation", model="/userspace/pva/weights/opusenru")
 
 global_history = {}
 
@@ -121,14 +112,8 @@ def send():
         # BUGMAYBE: file_type not the same as js content_type
         cur_query_list.append({'type': file_type, 'content': file_path.absolute()})
 
-    is_russian = False
-    if "message" in request.form:
-        message = request.form['message']
-        is_russian = any(set("йцукенгшщзхъфывапролджэячсмитьбю") & set(message.lower()))
-        if message:
-            if is_russian:
-                message = pipe_ruen(message)[0]['translation_text']
-            cur_query_list.append({'type': 'text', 'content': message})
+    if "message" in request.form and request.form['message']:
+        cur_query_list.append({'type': 'text', 'content': request.form['message']})
     
     # elif message == '/clear_context':
     #     global_history[cur_chat_id] = ("", "")
@@ -141,11 +126,7 @@ def send():
                                                     cur_query_list=cur_query_list,
                                                     history_list=history_list)
 
-            h_promt, h_answer = new_history_list
-            global_history[cur_chat_id] = (h_promt.replace("<image>", "image"), h_answer.replace("<image>", "image"))
-
-            if is_russian:
-                answer = pipe_enru(answer)[0]['translation_text']
+            global_history[cur_chat_id] = new_history_list
 
             return answer
         except Exception as e:
