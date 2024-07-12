@@ -271,7 +271,7 @@ def load_images(image_file_list: List[str]):
     
     if not image_file_list:
         return None
-    return [np.array(Image.open(file)) for file in image_file_list]
+    return [np.array(Image.open(file).convert("RGB")) for file in image_file_list]
 
 def tokenize_prompt(prompt: str, image_file_list: List[str], tokenizer: AutoTokenizer, add_eos_token: bool = True,
                     add_labels: bool=True) -> Dict[str, Tuple[List[int], List[torch.Tensor]]]:
