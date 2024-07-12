@@ -177,6 +177,7 @@ def extract_text_with_trocr(image_fname: str, model: MultimodalModel) -> str:
     
     # Process the image
     pixel_values = model.ocr[0](image, return_tensors="pt").pixel_values
+    pixel_values = pixel_values.to(DEVICE)
     generated_ids = model.ocr[1].generate(pixel_values)
 
     # Generate text
