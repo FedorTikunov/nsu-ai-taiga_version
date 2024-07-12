@@ -759,6 +759,7 @@ def generate_text(model: MultimodalModel, processor: LlavaNextProcessor,
     answer = generate_answer_based_on_prompt(prompt, image_file_list, model.llm, processor)
 
     answer = answer.replace("<image>", "image")
+    prompt = prompt.replace("<image>", "image")
 
     if is_russian:
         ret_answer = model.translate_enru(answer)[0]['translation_text']
