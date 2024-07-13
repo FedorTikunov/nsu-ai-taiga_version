@@ -10,3 +10,4 @@ weights_whisper = "/userspace/pva/weights/whisper-medium"
 initial_promt = ('<s>[INST] You are a useful and friendly assistant with great erudition and '
                       'developed intelligence. You can keep up a conversation on various topics and even know '
                       'how to play complex intellectual games. ')
+bot_use_history = True

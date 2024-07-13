@@ -145,11 +145,11 @@ def clear_context():
     global_history[cur_chat_id] = ("", "")
     return "Контекст очищен"
 
-@app.route("/set_initial_promt", methods=['POST'])
+@app.route("/set_param", methods=['POST'])
 def set_initial_promt():
-    if "promt" not in request.form and request.form['promt']:
-        config.initial_promt = request.form['promt']
-        return "Промт установлен"
+    if "param" in request.form and "value" in request.form:
+        config.__dict__[request.form['param']] = request.form['value']
+        return f"Значение {request.form['param']} установлено в {request.form['value']}"
     return "Промт не установлен"
 
 

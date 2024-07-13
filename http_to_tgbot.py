@@ -18,7 +18,13 @@ async def on_clean(message: Message):
 @dp.message(Command(commands=['set_promt']))
 async def on_promt_set(message: Message):
     new_promt = " ".join(message.text.split()[1:])
-    ans = requests.post(f"{sys.argv[1]}/set_initial_promt", data={"chat_id": message.chat.id, "promt": new_promt})
+    ans = requests.post(f"{sys.argv[1]}/set_param", data={"chat_id": message.chat.id, "param": "initial_promt", "value": new_promt})
+    await message.answer(ans.text)
+
+@dp.message(Command(commands=['set_history']))
+async def on_history_set(message: Message):
+    value = bool(int(message.text.split()[1]))
+    ans = requests.post(f"{sys.argv[1]}/set_param", data={"chat_id": message.chat.id, "param": "history", "value": value})
     await message.answer(ans.text)
 
 @dp.message()
