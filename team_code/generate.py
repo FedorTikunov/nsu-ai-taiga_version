@@ -632,25 +632,22 @@ def setup_model_and_tokenizer() -> Tuple[MultimodalModel, AutoTokenizer]:
         os.chdir(current_workdir)
         conversation_logger.info(f'Restored working directory: {os.getcwd()}')
         conversation_logger.info('The ONE-PEACE model is loaded.')
-    else:
-        onepeace_model = None
 
-    pca_fname = os.path.join(model_dir, 'wiki_onepeace_pca.pkl')
-    if not os.path.isfile(pca_fname):
-        err_msg = f'The file "{pca_fname}" does not exist!'
-        conversation_logger.error(err_msg)
-        raise ValueError(err_msg)
-    with open(pca_fname, 'rb') as fp:
-        pca = pickle.load(fp)
-    if not isinstance(pca, Pipeline):
-        err_msg = (f'The PCA pipeline loaded from the "{pca_fname}" has a wrong type! '
-                   f'Expected sklearn.pipeline.Pipeline, got {type(pca)}.')
-        conversation_logger.error(err_msg)
-        raise ValueError(err_msg)
-    feature_vector_size = pca.named_steps.pca.n_components
-    conversation_logger.info(f'The PCA pipeline is loaded. The feature vector size is {feature_vector_size}.')
+        pca_fname = os.path.join(model_dir, 'wiki_onepeace_pca.pkl')
+        if not os.path.isfile(pca_fname):
+            err_msg = f'The file "{pca_fname}" does not exist!'
+            conversation_logger.error(err_msg)
+            raise ValueError(err_msg)
+        with open(pca_fname, 'rb') as fp:
+            pca = pickle.load(fp)
+        if not isinstance(pca, Pipeline):
+            err_msg = (f'The PCA pipeline loaded from the "{pca_fname}" has a wrong type! '
+                    f'Expected sklearn.pipeline.Pipeline, got {type(pca)}.')
+            conversation_logger.error(err_msg)
+            raise ValueError(err_msg)
+        feature_vector_size = pca.named_steps.pca.n_components
+        conversation_logger.info(f'The PCA pipeline is loaded. The feature vector size is {feature_vector_size}.')
 
-    if config.load_one_peace:
         texts_fname = os.path.join(model_dir, 'en_wiki_paragraphs.txt')
         if not os.path.isfile(texts_fname):
             err_msg = f'The file "{texts_fname}" does not exist!'
@@ -685,6 +682,8 @@ def setup_model_and_tokenizer() -> Tuple[MultimodalModel, AutoTokenizer]:
             conversation_logger.error(err_msg)
             raise ValueError(err_msg)
     else:
+        onepeace_model = None
+        pca = None
         annoy_index = None
         paragraphs = None
 
