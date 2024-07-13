@@ -226,9 +226,9 @@ def find_text_by_image(image_fname: str, model: MultimodalModel, top_n: int = 10
         long_text = ''
 
     if config.use_blit:
-        result = " ".join(filter(bool, (image_caption, long_text, trocr_text)))
+        result = ". ".join(filter(bool, (image_caption, long_text, trocr_text)))
     else:
-        result = " ".join(filter(bool, (long_text, trocr_text)))
+        result = ". ".join(filter(bool, (long_text, trocr_text)))
 
     # if len(found_texts) > 1:
     #     result = image_caption + ' ' + find_long_text_similar_to_short_text(image_caption, found_texts, model)
@@ -275,7 +275,7 @@ def find_text_by_audio(audio_fname: str, model: MultimodalModel, top_n: int = 10
         else:
             long_text = ''
     
-    result = " ".join(filter(bool, (audio_caption, long_text)))
+    result = ". ".join(filter(bool, (audio_caption, long_text)))
     # if len(found_texts) > 1:
     #     result = audio_caption + ' ' + find_long_text_similar_to_short_text(audio_caption, found_texts, model)
     # else:
