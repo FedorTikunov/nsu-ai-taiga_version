@@ -163,6 +163,8 @@ def find_long_text_similar_to_short_text(short_text: str, long_texts: List[str],
     del all_sentences
     sentence_embeddings_of_short_text = model.sbert.encode([short_text])
     distances = cosine_distances(X=sentence_embeddings_of_short_text, Y=sentence_embeddings_of_long_texts)[0].tolist()
+    conversation_logger.info(f"indices22: {indices_of_long_texts}")
+    conversation_logger.info(f"dists22: {distances}")
     del sentence_embeddings_of_short_text, sentence_embeddings_of_long_texts
     sentences_with_distances = sorted(
         list(zip(indices_of_long_texts, distances)),
@@ -190,7 +192,7 @@ def extract_text_with_trocr(image_fname: str, model: MultimodalModel) -> str:
     return text
 
 
-def find_text_by_image(image_fname: str, model: MultimodalModel, top_n: int = 100, search_k: int = -1) -> str:
+def find_text_by_image(image_fname: str, model: MultimodalModel, top_n: int = 10, search_k: int = -1) -> str:
     if not os.path.isfile(image_fname):
         err_msg = f'The image "{image_fname}" does not exist!'
         conversation_logger.error(err_msg)
@@ -210,7 +212,9 @@ def find_text_by_image(image_fname: str, model: MultimodalModel, top_n: int = 10
         del src_images
         image_vector = model.pca.transform(image_features.cpu().type(torch.FloatTensor).numpy()[0:1])[0]
         del image_features
-        found_indices = model.annoy_index.get_nns_by_vector(image_vector, n=top_n, search_k=search_k)
+        found_indices, dists = model.annoy_index.get_nns_by_vector(image_vector, n=top_n, search_k=search_k, include_distances=True)
+        conversation_logger.info(f"Annoy indices: {found_indices}")
+        conversation_logger.info(f"Annoy dists: {dists}")
         del image_vector
         found_texts = [model.texts[idx] for idx in found_indices]
         del found_indices
