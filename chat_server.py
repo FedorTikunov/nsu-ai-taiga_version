@@ -146,11 +146,17 @@ def clear_context():
     return "Контекст очищен"
 
 @app.route("/set_param", methods=['POST'])
-def set_initial_promt():
+def set_param():
     if "param" in request.form and "value" in request.form:
         config.__dict__[request.form['param']] = request.form['value']
         return f"Значение {request.form['param']} установлено в {request.form['value']}"
     return "Промт не установлен"
+
+@app.route("/get_param", methods=['POST'])
+def get_param():
+    if "param" in request.form and request.form["param"] in config.__dict__:
+        return str(config.__dict__[request.form['param']])
+    return "Неизвестный параметр"
 
 
 if __name__ == '__main__':
