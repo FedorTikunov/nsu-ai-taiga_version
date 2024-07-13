@@ -531,9 +531,7 @@ def generate_full_prompt(model: MultimodalModel,
                        f'but the model\'s last answer {last_answer} is non empty. It is impossible!')
             conversation_logger.error(err_msg)
             raise ValueError(err_msg)
-        new_prompt = ('<s>[INST] You are a useful and friendly assistant with great erudition and '
-                      'developed intelligence. You can keep up a conversation on various topics and even know '
-                      'how to play complex intellectual games. ')
+        new_prompt = config.initial_promt
     else:
         if len(last_answer) > 0:
             new_prompt = previous_dialogue + ' ' + last_answer + '</s> [INST]'
