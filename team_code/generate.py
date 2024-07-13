@@ -751,6 +751,8 @@ def generate_text(model: MultimodalModel, processor: LlavaNextProcessor,
         for query in cur_query_list:
             if 'type' in query and query['type'] == 'text':
                 query["content"] = model.translate_ruen(query["content"])[0]['translation_text']
+    if not config.bot_use_history:
+        history_list = ('', '')
     prompt = generate_full_prompt(model, cur_query_list, history_list)
     conversation_logger.info(f'Current prompt: {prompt}')
     answer = generate_answer_based_on_prompt(prompt, image_file_list, model.llm, processor)
