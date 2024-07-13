@@ -43,7 +43,7 @@ async def on_param_set(message: Message):
 async def on_param_get(message: Message):
     # value = bool(int(message.text.split()[1]))
     param = message.text.split()[1]
-    ans = requests.post(f"{sys.argv[1]}/set_param", data={"chat_id": message.chat.id, "param": param})
+    ans = requests.post(f"{sys.argv[1]}/get_param", data={"chat_id": message.chat.id, "param": param})
     await message.answer(f"{param}='{ans.text}'")
 
 @dp.message()
