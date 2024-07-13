@@ -1,33 +1,79 @@
-aac-datasets==0.3.3
-datasets==2.13.1
-evaluate==0.4.0
-huggingface-hub==0.16.4
-#imagebind @git+https://github.com/facebookresearch/ImageBind.git
-jupyter==1.0.0
-pydub==0.25.1
-pytorchvideo==0.1.5
-rouge-score==0.1.2
-sentencepiece==0.1.99
-sentence-transformers==2.2.2
-tokenizers==0.14.0
-torch==2.0.1
-torchaudio==2.0.2
-torchdata==0.6.1
-torchinfo==1.8.0
-torchtext==0.15.2
-torchvision==0.15.2
-transformers==4.35.0
-tqdm==4.65.0
+accelerate==0.32.1
+annoy==1.17.3
+antlr4-python3-runtime==4.8
+audioread==3.0.1
+bitarray==2.9.2
+blinker==1.8.2
+Brotli @ file:///croot/brotli-split_1714483155106/work
+certifi @ file:///croot/certifi_1720453481653/work/certifi
+cffi==1.16.0
+charset-normalizer @ file:///tmp/build/80754af9/charset-normalizer_1630003229654/work
+click==8.1.7
+cmake==3.25.0
+colorama==0.4.6
+Cython==3.0.10
+decorator==5.1.1
+fairseq @ file:///userspace/pva/nsu-ai-taiga_version/team_code/ONE-PEACE/fairseq
+filelock @ file:///croot/filelock_1700591183607/work
+Flask==3.0.3
+fsspec==2024.6.1
+gmpy2 @ file:///tmp/build/80754af9/gmpy2_1645438755360/work
+huggingface-hub==0.23.4
+hydra-core==1.0.7
+idna @ file:///croot/idna_1714398848350/work
+importlib_metadata==8.0.0
+itsdangerous==2.2.0
+Jinja2 @ file:///croot/jinja2_1716993405101/work
+joblib==1.4.2
+lazy_loader==0.4
+librosa==0.10.2.post1
+lit==15.0.7
+llvmlite==0.43.0
+lxml==5.2.2
+MarkupSafe @ file:///croot/markupsafe_1704205993651/work
+mkl-fft @ file:///croot/mkl_fft_1695058164594/work
+mkl-random @ file:///croot/mkl_random_1695059800811/work
+mkl-service==2.4.0
+mpmath @ file:///croot/mpmath_1690848262763/work
+msgpack==1.0.8
+networkx @ file:///croot/networkx_1717597493534/work
 nltk==3.8.1
-pandas==2.0.3
-jsonlines
-numpy
-annoy
-requests
-#urllib
-telebot
-uuid
-aiogram==2.23.1
-aiolimiter==1.1.0
-aiohttp
-ffmpeg
+numba==0.60.0
+numpy==1.26.4
+omegaconf==2.0.6
+opencv-python==4.10.0.84
+packaging==24.1
+pillow==10.4.0
+platformdirs==4.2.2
+pooch==1.8.2
+portalocker==2.10.0
+psutil==6.0.0
+pycparser==2.22
+pydub==0.25.1
+PySocks @ file:///tmp/build/80754af9/pysocks_1605305812635/work
+PyYAML==6.0.1
+regex==2024.5.15
+requests==2.32.3
+sacrebleu==2.4.2
+safetensors==0.4.3
+scikit-learn==1.5.1
+scipy==1.13.1
+sentence-transformers==3.0.1
+sentencepiece==0.2.0
+soundfile==0.12.1
+soxr==0.3.7
+sympy==1.13.0
+tabulate==0.9.0
+threadpoolctl==3.5.0
+timm==1.0.7
+tokenizers==0.19.1
+torch==2.0.1+cu117
+torchaudio==2.0.2+cu117
+torchvision==0.15.2+cu117
+tqdm==4.66.4
+transformers==4.42.4
+triton==2.0.0
+typing_extensions==4.12.2
+urllib3 @ file:///croot/urllib3_1718912636303/work
+Werkzeug==3.0.3
+zipp==3.19.2
