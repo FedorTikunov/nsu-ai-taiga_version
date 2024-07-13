@@ -12,7 +12,13 @@ dp = Dispatcher()
 
 @dp.message(Command(commands=['clean']))
 async def on_clean(message: Message):
-    ans = requests.post(f"{sys.argv[1]}/clear_context", json={"chat_id": message.chat.id})
+    ans = requests.post(f"{sys.argv[1]}/clear_context", data={"chat_id": message.chat.id})
+    await message.answer(ans.text)
+
+@dp.message(Command(commands=['set_promt']))
+async def on_promt_set(message: Message):
+    new_promt = " ".join(message.text.split()[1:])
+    ans = requests.post(f"{sys.argv[1]}/set_initial_promt", data={"chat_id": message.chat.id, "promt": new_promt})
     await message.answer(ans.text)
 
 @dp.message()

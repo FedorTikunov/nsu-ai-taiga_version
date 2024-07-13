@@ -145,6 +145,13 @@ def clear_context():
     global_history[cur_chat_id] = ("", "")
     return "Контекст очищен"
 
+@app.route("/set_initial_promt", methods=['POST'])
+def set_initial_promt():
+    if "promt" not in request.form and request.form['promt']:
+        config.initial_promt = request.form['promt']
+        return "Промт установлен"
+    return "Промт не установлен"
+
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=config.flask_debug)
