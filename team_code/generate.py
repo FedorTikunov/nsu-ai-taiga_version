@@ -27,6 +27,7 @@ from sentence_transformers import SentenceTransformer
 from PIL import Image
 import config
 from torchvision import transforms
+from team_code.ONE_PEACE.one_peace.models import from_pretrained
 
 DEVICE = torch.device("cuda:0")
 # DEVICE = torch.device("cpu")
@@ -196,25 +197,46 @@ def find_text_by_image(image_fname: str, model: MultimodalModel, top_n: int = 10
         raise ValueError(err_msg)
     image_caption = generate_image_caption(image_fname, model)
 
-    trocr_text = extract_text_with_trocr(image_fname, model)
-    
-    src_images = model.one_peace.process_image([image_fname])
-    with torch.no_grad():
-        image_features = model.one_peace.extract_image_features(src_images)
-    del src_images
-    image_vector = model.pca.transform(image_features.cpu().type(torch.FloatTensor).numpy()[0:1])[0]
-    del image_features
-    found_indices = model.annoy_index.get_nns_by_vector(image_vector, n=top_n, search_k=search_k)
-    del image_vector
-    found_texts = [model.texts[idx] for idx in found_indices]
-    del found_indices
-    if len(found_texts) > 1:
-        result = image_caption + ' ' + find_long_text_similar_to_short_text(image_caption, found_texts, model)
+    if config.use_ocr:
+        trocr_text = extract_text_with_trocr(image_fname, model)
+        trocr_text = f'Image has such text: "{trocr_text}"'
     else:
-        result = image_caption + ' ' + found_texts[0]
+        trocr_text = ''
+    
+    if config.use_one_peace:
+        src_images = model.one_peace.process_image([image_fname])
+        with torch.no_grad():
+            image_features = model.one_peace.extract_image_features(src_images)
+        del src_images
+        image_vector = model.pca.transform(image_features.cpu().type(torch.FloatTensor).numpy()[0:1])[0]
+        del image_features
+        found_indices = model.annoy_index.get_nns_by_vector(image_vector, n=top_n, search_k=search_k)
+        del image_vector
+        found_texts = [model.texts[idx] for idx in found_indices]
+        del found_indices
+        long_text = find_long_text_similar_to_short_text(image_caption, found_texts, model)
+        if len(found_texts) > 1:
+            if len(found_texts) == 1:
+                long_text = found_texts[0]
+            else:
+                long_text = find_long_text_similar_to_short_text(image_caption, found_texts, model)
+        else:
+            long_text = ''
+    else:
+        long_text = ''
 
-    if len(trocr_text) > 1:
-        result = result + ' Image has such text: ' + '"' + trocr_text + '"'
+    if config.use_blit:
+        result = " ".join(filter(bool, (image_caption, long_text, trocr_text)))
+    else:
+        result = " ".join(filter(bool, (long_text, trocr_text)))
+
+    # if len(found_texts) > 1:
+    #     result = image_caption + ' ' + find_long_text_similar_to_short_text(image_caption, found_texts, model)
+    # else:
+    #     result = image_caption + ' ' + found_texts[0]
+
+    # if len(trocr_text) > 0:
+    #     result = result + ' Image has such text: ' + '"' + trocr_text + '"'
     
     return ' '.join(result.split())
 
@@ -233,20 +255,31 @@ def find_text_by_audio(audio_fname: str, model: MultimodalModel, top_n: int = 10
         audio_caption = audio_caption[0].upper() + audio_caption[1:]
     if is_speech:
         return audio_caption, True
-    src_audios, audio_padding_masks = model.one_peace.process_audio([audio_fname])
-    with torch.no_grad():
-        audio_features = model.one_peace.extract_audio_features(src_audios, audio_padding_masks)
-    del src_audios, audio_padding_masks
-    audio_vector = model.pca.transform(audio_features.cpu().type(torch.FloatTensor).numpy()[0:1])[0]
-    del audio_features
-    found_indices = model.annoy_index.get_nns_by_vector(audio_vector, n=top_n, search_k=search_k)
-    del audio_vector
-    found_texts = [model.texts[idx] for idx in found_indices]
-    del found_indices
-    if len(found_texts) > 1:
-        result = audio_caption + ' ' + find_long_text_similar_to_short_text(audio_caption, found_texts, model)
-    else:
-        result = audio_caption + ' ' + found_texts[0]
+    
+    if config.use_one_peace:
+        src_audios, audio_padding_masks = model.one_peace.process_audio([audio_fname])
+        with torch.no_grad():
+            audio_features = model.one_peace.extract_audio_features(src_audios, audio_padding_masks)
+        del src_audios, audio_padding_masks
+        audio_vector = model.pca.transform(audio_features.cpu().type(torch.FloatTensor).numpy()[0:1])[0]
+        del audio_features
+        found_indices = model.annoy_index.get_nns_by_vector(audio_vector, n=top_n, search_k=search_k)
+        del audio_vector
+        found_texts = [model.texts[idx] for idx in found_indices]
+        del found_indices
+        if len(found_texts) > 1:
+            if len(found_texts) == 1:
+                long_text = found_texts[0]
+            else:
+                long_text = find_long_text_similar_to_short_text(audio_caption, found_texts, model)
+        else:
+            long_text = ''
+    
+    result = " ".join(filter(bool, (audio_caption, long_text)))
+    # if len(found_texts) > 1:
+    #     result = audio_caption + ' ' + find_long_text_similar_to_short_text(audio_caption, found_texts, model)
+    # else:
+    #     result = audio_caption + ' ' + found_texts[0]
     return ' '.join(result.split()), False
     
 def process_image(image_fname: str) -> torch.Tensor:
@@ -565,14 +598,14 @@ def setup_model_and_tokenizer() -> Tuple[MultimodalModel, AutoTokenizer]:
     #     conversation_logger.error(err_msg)
     #     raise ValueError(err_msg)
     one_peace_dir = os.path.join(os.path.dirname(__file__), 'ONE-PEACE')
-    if not os.path.isdir(one_peace_dir):
-        err_msg = f'The directory "{one_peace_dir}" does not exist!'
-        conversation_logger.error(err_msg)
-        raise ValueError(err_msg)
-    sys.path.append(one_peace_dir)
-    from one_peace.models import from_pretrained
+    # if not os.path.isdir(one_peace_dir):
+    #     err_msg = f'The directory "{one_peace_dir}" does not exist!'
+    #     conversation_logger.error(err_msg)
+    #     raise ValueError(err_msg)
+    # sys.path.append(one_peace_dir)
+    # from one_peace.models import from_pretrained
 
-    conversation_logger.info('ONE-PEACE is attached.')
+    # conversation_logger.info('ONE-PEACE is attached.')
 
     # model_dir = os.path.join(os.path.dirname(__file__), 'models')
     model_dir = config.weights_path
@@ -588,16 +621,19 @@ def setup_model_and_tokenizer() -> Tuple[MultimodalModel, AutoTokenizer]:
         raise ValueError(err_msg)
     current_workdir = os.getcwd()
     conversation_logger.info(f'Current working directory: {current_workdir}')
-    os.chdir(one_peace_dir)
-    conversation_logger.info(f'New working directory: {os.getcwd()}')
-    if DEVICE.type == "cpu":
-        onepeace_model = from_pretrained(one_peace_model_fname, device=DEVICE)
+    if config.load_one_peace:
+        os.chdir(one_peace_dir)
+        conversation_logger.info(f'New working directory: {os.getcwd()}')
+        if DEVICE.type == "cpu":
+            onepeace_model = from_pretrained(one_peace_model_fname, device=DEVICE)
+        else:
+            onepeace_model = from_pretrained(one_peace_model_fname, device=DEVICE, dtype='fp16')
+        conversation_logger.info(f'ONE-PEACE model is loaded from the "{one_peace_model_fname}".')
+        os.chdir(current_workdir)
+        conversation_logger.info(f'Restored working directory: {os.getcwd()}')
+        conversation_logger.info('The ONE-PEACE model is loaded.')
     else:
-        onepeace_model = from_pretrained(one_peace_model_fname, device=DEVICE, dtype='fp16')
-    conversation_logger.info(f'ONE-PEACE model is loaded from the "{one_peace_model_fname}".')
-    os.chdir(current_workdir)
-    conversation_logger.info(f'Restored working directory: {os.getcwd()}')
-    conversation_logger.info('The ONE-PEACE model is loaded.')
+        onepeace_model = None
 
     pca_fname = os.path.join(model_dir, 'wiki_onepeace_pca.pkl')
     if not os.path.isfile(pca_fname):
@@ -614,39 +650,43 @@ def setup_model_and_tokenizer() -> Tuple[MultimodalModel, AutoTokenizer]:
     feature_vector_size = pca.named_steps.pca.n_components
     conversation_logger.info(f'The PCA pipeline is loaded. The feature vector size is {feature_vector_size}.')
 
-    texts_fname = os.path.join(model_dir, 'en_wiki_paragraphs.txt')
-    if not os.path.isfile(texts_fname):
-        err_msg = f'The file "{texts_fname}" does not exist!'
-        conversation_logger.error(err_msg)
-        raise ValueError(err_msg)
-    paragraphs = []
-    counter = 0
-    for curline in fileinput.input(texts_fname, openhook=fileinput.hook_encoded("utf-8", "surrogateescape")):
-        prepline = curline.strip()
-        if len(prepline) > 0:
-            paragraphs.append(prepline)
-            counter += 1
-            if counter % 1_000_000 == 0:
-                conversation_logger.info(f'{counter} paragraphs are loaded from the "{texts_fname}".')
-    gc.collect()
-    info_msg = (f'The text corpus with Wikipedia paragraphs is loaded. '
-                f'There are {len(paragraphs)} paragraphs in this corpus.')
-    conversation_logger.info(info_msg)
+    if config.load_one_peace:
+        texts_fname = os.path.join(model_dir, 'en_wiki_paragraphs.txt')
+        if not os.path.isfile(texts_fname):
+            err_msg = f'The file "{texts_fname}" does not exist!'
+            conversation_logger.error(err_msg)
+            raise ValueError(err_msg)
+        paragraphs = []
+        counter = 0
+        for curline in fileinput.input(texts_fname, openhook=fileinput.hook_encoded("utf-8", "surrogateescape")):
+            prepline = curline.strip()
+            if len(prepline) > 0:
+                paragraphs.append(prepline)
+                counter += 1
+                if counter % 1_000_000 == 0:
+                    conversation_logger.info(f'{counter} paragraphs are loaded from the "{texts_fname}".')
+        gc.collect()
+        info_msg = (f'The text corpus with Wikipedia paragraphs is loaded. '
+                    f'There are {len(paragraphs)} paragraphs in this corpus.')
+        conversation_logger.info(info_msg)
 
-    annoy_fname = os.path.join(model_dir, 'en_wiki_paragraphs.ann')
-    if not os.path.isfile(annoy_fname):
-        err_msg = f'The file "{annoy_fname}" does not exist!'
-        conversation_logger.error(err_msg)
-        raise ValueError(err_msg)
-    annoy_index = AnnoyIndex(feature_vector_size, 'angular')
-    annoy_index.load(annoy_fname)
-    conversation_logger.info('The Annoy index for Wikipedia paragraphs is loaded.')
-    n_annoy_items = annoy_index.get_n_items()
-    if n_annoy_items != len(paragraphs):
-        err_msg = (f'The Wiki text corpus does not correspond to the Wiki text index, '
-                   f'because their sizes are not same! {n_annoy_items} != {len(paragraphs)}.')
-        conversation_logger.error(err_msg)
-        raise ValueError(err_msg)
+        annoy_fname = os.path.join(model_dir, 'en_wiki_paragraphs.ann')
+        if not os.path.isfile(annoy_fname):
+            err_msg = f'The file "{annoy_fname}" does not exist!'
+            conversation_logger.error(err_msg)
+            raise ValueError(err_msg)
+        annoy_index = AnnoyIndex(feature_vector_size, 'angular')
+        annoy_index.load(annoy_fname)
+        conversation_logger.info('The Annoy index for Wikipedia paragraphs is loaded.')
+        n_annoy_items = annoy_index.get_n_items()
+        if n_annoy_items != len(paragraphs):
+            err_msg = (f'The Wiki text corpus does not correspond to the Wiki text index, '
+                    f'because their sizes are not same! {n_annoy_items} != {len(paragraphs)}.')
+            conversation_logger.error(err_msg)
+            raise ValueError(err_msg)
+    else:
+        annoy_index = None
+        paragraphs = None
 
     audio_cls_dirname = os.path.join(model_dir, 'auxiliary_models', 'audioset')
     if not os.path.isdir(audio_cls_dirname):
@@ -658,21 +698,27 @@ def setup_model_and_tokenizer() -> Tuple[MultimodalModel, AutoTokenizer]:
         audio_cls = ASTForAudioClassification.from_pretrained(audio_cls_dirname).to(DEVICE)
     else:
         audio_cls = ASTForAudioClassification.from_pretrained(audio_cls_dirname, torch_dtype=torch.float16).to(DEVICE)
-    image_captioning_dirname = os.path.join(model_dir, 'auxiliary_models', 'blip')
-    if not os.path.isdir(image_captioning_dirname):
-        err_msg = f'The directory "{image_captioning_dirname}" does not exist!'
-        conversation_logger.error(err_msg)
-        raise ValueError(err_msg)
-    image_processor = BlipProcessor.from_pretrained(image_captioning_dirname)
-    if DEVICE.type == "cpu":
-        image_caption_generator = BlipForConditionalGeneration.from_pretrained(
-            image_captioning_dirname
-        ).to(DEVICE)
+    
+    if config.use_blit:
+        image_captioning_dirname = os.path.join(model_dir, 'auxiliary_models', 'blip')
+        if not os.path.isdir(image_captioning_dirname):
+            err_msg = f'The directory "{image_captioning_dirname}" does not exist!'
+            conversation_logger.error(err_msg)
+            raise ValueError(err_msg)
+        image_processor = BlipProcessor.from_pretrained(image_captioning_dirname)
+        if DEVICE.type == "cpu":
+            image_caption_generator = BlipForConditionalGeneration.from_pretrained(
+                image_captioning_dirname
+            ).to(DEVICE)
+        else:
+            image_caption_generator = BlipForConditionalGeneration.from_pretrained(
+                image_captioning_dirname,
+                torch_dtype=torch.float16
+            ).to(DEVICE)
     else:
-        image_caption_generator = BlipForConditionalGeneration.from_pretrained(
-            image_captioning_dirname,
-            torch_dtype=torch.float16
-        ).to(DEVICE)
+        image_captioning_dirname = None
+        image_processor = None
+        image_caption_generator = None
 
     # asr_dirname = os.path.join(model_dir, 'auxiliary_models', 'whisper_medium')
     # if not os.path.isdir(asr_dirname):
