@@ -156,7 +156,7 @@ def set_param():
 def get_param():
     if "param" in request.form and request.form["param"] in config.__dict__:
         param = config.__dict__[request.form['param']]
-        return f"{type(param)} = {param}"
+        return f"{type(param)} = '{param}'"
     return "Неизвестный параметр"
 
 
