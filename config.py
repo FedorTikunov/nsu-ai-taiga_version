@@ -17,3 +17,6 @@ load_blit = True
 use_blit = True
 load_ocr = True
 use_ocr = True
+max_wiki_paragraphs = 10
+annoy_search_k = -1
+use_annoy_dist = True

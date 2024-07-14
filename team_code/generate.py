@@ -28,15 +28,31 @@ from PIL import Image
 import config
 from torchvision import transforms
 from team_code.ONE_PEACE.one_peace.models import from_pretrained
+from team_code.ONE_PEACE.one_peace.models.one_peace.hub_interface import OnePeaceHubInterface
+from dataclasses import dataclass
 
 DEVICE = torch.device("cuda:0")
 # DEVICE = torch.device("cpu")
 TARGET_SAMPLING_FREQUENCY = 16_000
 
-MultimodalModel = namedtuple(
-    'MultimodalModel',
-    'image audio speech sbert one_peace pca annoy_index texts ocr llm translate_ruen translate_enru'
-)
+@dataclass
+class MultimodalModel:
+    image: Tuple[VisionEncoderDecoderModel, VisionEncoderDecoderModel]
+    audio: Tuple[VisionEncoderDecoderModel, VisionEncoderDecoderModel]
+    speech: VisionEncoderDecoderModel
+    sbert: SentenceTransformer
+    one_peace: OnePeaceHubInterface
+    pca: Pipeline
+    annoy_index: AnnoyIndex
+    texts: List[str]
+    ocr: TrOCRProcessor
+    llm: LlavaNextForConditionalGeneration
+    translate_ruen: pipeline
+    translate_enru: pipeline
+# MultimodalModel = namedtuple(
+#     'MultimodalModel',
+#     'image audio speech sbert one_peace pca annoy_index texts ocr llm translate_ruen translate_enru'
+# )
 conversation_logger = logging.getLogger(__name__)
 PUNCTUATION = {'.', '?', '!', ':', '-', ';'}
 CARDINAL_UNITS = {'1': 'one', '2': 'two', '3': 'three', '4': 'four', '5': 'five', '6': 'six', '7': 'seven',
@@ -190,45 +206,55 @@ def extract_text_with_trocr(image_fname: str, model: MultimodalModel) -> str:
     return text
 
 
-def find_text_by_image(image_fname: str, model: MultimodalModel, top_n: int = 100, search_k: int = -1) -> str:
+def find_text_by_image(image_fname: str, model: MultimodalModel) -> str:
     if not os.path.isfile(image_fname):
         err_msg = f'The image "{image_fname}" does not exist!'
         conversation_logger.error(err_msg)
         raise ValueError(err_msg)
-    image_caption = generate_image_caption(image_fname, model)
+    if config.use_blit and config.load_blit:
+        image_caption = generate_image_caption(image_fname, model)
+    else:
+        image_caption = ''
 
-    if config.use_ocr:
+    if config.use_ocr and config.load_ocr:
         trocr_text = extract_text_with_trocr(image_fname, model)
         trocr_text = f'Image has such text: "{trocr_text}"'
     else:
         trocr_text = ''
     
-    if config.use_one_peace:
-        src_images = model.one_peace.process_image([image_fname])
-        with torch.no_grad():
-            image_features = model.one_peace.extract_image_features(src_images)
-        del src_images
-        image_vector = model.pca.transform(image_features.cpu().type(torch.FloatTensor).numpy()[0:1])[0]
-        del image_features
-        found_indices = model.annoy_index.get_nns_by_vector(image_vector, n=top_n, search_k=search_k)
-        del image_vector
-        found_texts = [model.texts[idx] for idx in found_indices]
-        del found_indices
-        long_text = find_long_text_similar_to_short_text(image_caption, found_texts, model)
-        if len(found_texts) > 1:
-            if len(found_texts) == 1:
-                long_text = found_texts[0]
+    if config.use_one_peace and config.load_one_peace:
+        if image_caption:
+            src_images, src_tokens = model.one_peace.process_image_and_text([(image_fname, image_caption)])
+            with torch.no_grad():
+                image_features = model.one_peace.extract_image_features(src_images)
+                text_features = model.one_peace.extract_text_features(src_tokens)
+            del src_images, src_tokens
+            image_vector = model.pca.transform(image_features.cpu().type(torch.FloatTensor).numpy()[0:1])[0]
+            text_vector = model.pca.transform(text_features.cpu().type(torch.FloatTensor).numpy()[0:1])[0]
+            del image_features, text_features
+            found_indices = model.annoy_index.get_nns_by_vector((image_vector + text_vector) / 2, n=config.max_wiki_paragraphs, search_k=config.annoy_search_k)
+            del image_vector, text_vector
+            if config.use_annoy_dist:
+                long_text = model.texts[found_indices[0]]
+                del found_indices
             else:
+                found_texts = [model.texts[idx] for idx in found_indices]
+                del found_indices
                 long_text = find_long_text_similar_to_short_text(image_caption, found_texts, model)
         else:
-            long_text = ''
+            src_images = model.one_peace.process_image([image_fname])
+            with torch.no_grad():
+                image_features = model.one_peace.extract_image_features(src_images)
+            del src_images
+            image_vector = model.pca.transform(image_features.cpu().type(torch.FloatTensor).numpy()[0:1])[0]
+            del image_features
+            found_indices = model.annoy_index.get_nns_by_vector(image_vector, n=config.max_wiki_paragraphs, search_k=config.annoy_search_k)
+            long_text = model.texts[found_indices[0]]
+            del image_vector, found_indices
     else:
         long_text = ''
 
-    if config.use_blit:
-        result = ". ".join(filter(bool, (image_caption, long_text, trocr_text)))
-    else:
-        result = ". ".join(filter(bool, (long_text, trocr_text)))
+    result = ". ".join(filter(bool, (image_caption, long_text, trocr_text)))
 
     # if len(found_texts) > 1:
     #     result = image_caption + ' ' + find_long_text_similar_to_short_text(image_caption, found_texts, model)
@@ -241,8 +267,7 @@ def find_text_by_image(image_fname: str, model: MultimodalModel, top_n: int = 10
     return ' '.join(result.split())
 
 
-def find_text_by_audio(audio_fname: str, model: MultimodalModel, top_n: int = 100,
-                       search_k: int = -1) -> Tuple[str, bool]:
+def find_text_by_audio(audio_fname: str, model: MultimodalModel) -> Tuple[str, bool]:
     if not os.path.isfile(audio_fname):
         err_msg = f'The image "{audio_fname}" does not exist!'
         conversation_logger.error(err_msg)
@@ -256,14 +281,14 @@ def find_text_by_audio(audio_fname: str, model: MultimodalModel, top_n: int = 10
     if is_speech:
         return audio_caption, True
     
-    if config.use_one_peace:
+    if config.use_one_peace and config.load_one_peace:
         src_audios, audio_padding_masks = model.one_peace.process_audio([audio_fname])
         with torch.no_grad():
             audio_features = model.one_peace.extract_audio_features(src_audios, audio_padding_masks)
         del src_audios, audio_padding_masks
         audio_vector = model.pca.transform(audio_features.cpu().type(torch.FloatTensor).numpy()[0:1])[0]
         del audio_features
-        found_indices = model.annoy_index.get_nns_by_vector(audio_vector, n=top_n, search_k=search_k)
+        found_indices = model.annoy_index.get_nns_by_vector(audio_vector, n=config.max_wiki_paragraphs, search_k=config.annoy_search_k)
         del audio_vector
         found_texts = [model.texts[idx] for idx in found_indices]
         del found_indices
@@ -597,7 +622,6 @@ def setup_model_and_tokenizer() -> Tuple[MultimodalModel, AutoTokenizer]:
     #     err_msg = 'CUDA is not available!'
     #     conversation_logger.error(err_msg)
     #     raise ValueError(err_msg)
-    one_peace_dir = os.path.join(os.path.dirname(__file__), 'ONE-PEACE')
     # if not os.path.isdir(one_peace_dir):
     #     err_msg = f'The directory "{one_peace_dir}" does not exist!'
     #     conversation_logger.error(err_msg)
@@ -622,6 +646,7 @@ def setup_model_and_tokenizer() -> Tuple[MultimodalModel, AutoTokenizer]:
     current_workdir = os.getcwd()
     conversation_logger.info(f'Current working directory: {current_workdir}')
     if config.load_one_peace:
+        one_peace_dir = os.path.join(os.path.dirname(__file__), 'ONE-PEACE')
         os.chdir(one_peace_dir)
         conversation_logger.info(f'New working directory: {os.getcwd()}')
         if DEVICE.type == "cpu":
