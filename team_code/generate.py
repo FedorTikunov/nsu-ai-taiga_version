@@ -33,10 +33,10 @@ import startup_config
 from torchvision.transforms import InterpolationMode
 from ultralytics import YOLO
 from PIL.ImageFile import ImageFile
+from ultralytics.engine.results import Results
 DEVICE = torch.device("cuda:0")
 # DEVICE = torch.device("cpu")
 TARGET_SAMPLING_FREQUENCY = 16_000
-from ultralytics.engine.results import Results
 
 
 @dataclass
