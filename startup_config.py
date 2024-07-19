@@ -6,6 +6,7 @@ weights_ruen = "/userspace/pva/weights/opusruen"
 weights_enru = "/userspace/pva/weights/opusenru"
 weights_ocr = "/userspace/pva/weights/ocr"
 weights_whisper = "/userspace/pva/weights/whisper-medium"
+weights_mistral = "/userspace/dra/nsu-ai/team_code/models/llm"
 load_one_peace = True
 load_blit = True
 load_ocr = True
