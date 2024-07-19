@@ -388,24 +388,26 @@ def process_image(image_fname: str) -> torch.Tensor:
     return image_tensor
 
 def detect_and_crop_objects(image_fname: str, model: MultimodalModel):
+    from ultralytics.engine.model import Results
     cropped_images = []
 
     # Load image
     image = Image.open(image_fname)
 
     # Preprocess image for YOLOv8
-    inputs = model.yolo.processor(images=image, return_tensors="pt", size=416)
-    inputs = {k: v.to(model.yolo.device) for k, v in inputs.items()}
+    # inputs = model.yolo.processor(images=image, return_tensors="pt", size=416)
+    # inputs = {k: v.to(model.yolo.device) for k, v in inputs.items()}
 
-    # Run object detection
-    with torch.no_grad():
-            outputs = model.yolo(**inputs)
+    # # Run object detection
+    # with torch.no_grad():
+    #         outputs = model.yolo(**inputs)
 
-    # Postprocess detections
-    detections =  model.yolo.processor.postprocess(outputs, inputs["image_sizes"])
-    for detection in detections:
+    # # Postprocess detections
+    # detections =  model.yolo.processor.postprocess(outputs, inputs["image_sizes"])
+    prediction: Results = model.yolo(image, stream=True)[0]
+    for box in prediction.boxes:
         # Get bounding box coordinates
-        x_min, y_min, x_max, y_max = detection["boxes"].tolist()
+        x_min, y_min, x_max, y_max = box
 
         # Crop object from image and append to list
         cropped_image = image.crop((x_min, y_min, x_max, y_max))
