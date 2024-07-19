@@ -388,8 +388,7 @@ def detect_and_crop_objects(image_fname: str, model: MultimodalModel):
 
     return cropped_images
 
-
-def process_yolo_image_for_one_peace(image_list: List[PIL.Image], device="cuda:0", return_image_sizes=False) -> List[torch.Tensor]:
+def process_yolo_image_for_one_peace(image_list: List[Image.ImageFile.ImageFile], device="cuda:0", return_image_sizes=False) -> List[torch.Tensor]:
     def cast_data_dtype(self, t):
         if self.dtype == "bf16":
             return t.to(dtype=torch.bfloat16)
@@ -404,7 +403,7 @@ def process_yolo_image_for_one_peace(image_list: List[PIL.Image], device="cuda:0
     std = CLIP_DEFAULT_STD
     transform = transforms.Compose([
         transforms.Resize(
-            (cfg.task.patch_image_size, cfg.task.patch_image_size),
+            (256, 256),
             interpolation=InterpolationMode.BICUBIC
         ),
         transforms.ToTensor(),
@@ -903,9 +902,9 @@ def setup_model_and_tokenizer() -> Tuple[MultimodalModel, AutoTokenizer]:
     # Load YOLOv8 model and processor
     if startup_config.load_yolov8:
         if DEVICE.type == "cpu":
-            yolov8 = YOLO.from_pretrained(startup_config.weights_yolo).to(DEVICE)
+            yolov8 = YOLO(startup_config.weights_yolo).to(DEVICE)
         else:
-            yolov8 = YOLO.from_pretrained(startup_config.weights_yolo, torch_dtype=torch.float16).to(DEVICE)
+            yolov8 = YOLO(startup_config.weights_yolo, torch_dtype=torch.float16).to(DEVICE)
         conversation_logger.info('The YOLOv8 model is loaded.')
     else:
         yolov8 = None
