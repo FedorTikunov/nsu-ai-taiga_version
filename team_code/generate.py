@@ -417,13 +417,6 @@ def detect_and_crop_objects(image_fname: str, model: MultimodalModel):
     return cropped_images
 
 def process_yolo_image_for_one_peace(image_list: List[ImageFile], device="cuda:0", return_image_sizes=False) -> List[torch.Tensor]:
-    def cast_data_dtype(self, t):
-        if self.dtype == "bf16":
-            return t.to(dtype=torch.bfloat16)
-        elif self.dtype == "fp16":
-            return t.to(dtype=torch.half)
-        else:
-            return t
 
     CLIP_DEFAULT_MEAN = (0.48145466, 0.4578275, 0.40821073)
     CLIP_DEFAULT_STD = (0.26862954, 0.26130258, 0.27577711)
@@ -448,7 +441,6 @@ def process_yolo_image_for_one_peace(image_list: List[ImageFile], device="cuda:0
         image_width_list.append(w)
         image_height_list.append(h)
     src_images = torch.stack(patch_images_list, dim=0).to(device)
-    src_images = cast_data_dtype(src_images)
     if return_image_sizes:
         image_widths = torch.tensor(image_width_list).to(device)
         image_heights = torch.tensor(image_height_list).to(device)
