@@ -408,7 +408,7 @@ def detect_and_crop_objects(image_fname: str, model: MultimodalModel):
     prediction: Results = model.yolo(image, stream=True)[0]
     for box in prediction.boxes:
         # Get bounding box coordinates
-        x_min, y_min, x_max, y_max = box.xyxy
+        x_min, y_min, x_max, y_max = box.xyxy[0]
 
         # Crop object from image and append to list
         cropped_image = image.crop((x_min, y_min, x_max, y_max))
