@@ -51,6 +51,7 @@ class MultimodalModel:
     llm: LlavaNextForConditionalGeneration
     translate_ruen: pipeline
     translate_enru: pipeline
+    yolo: YOLO
 # MultimodalModel = namedtuple(
 #     'MultimodalModel',
 #     'image audio speech sbert one_peace pca annoy_index texts ocr llm translate_ruen translate_enru'
@@ -924,7 +925,7 @@ def setup_model_and_tokenizer() -> Tuple[MultimodalModel, AutoTokenizer]:
         trocr_model = None
 
     # Load YOLOv8 model and processor
-    if startup_config.load_yolov8:
+    if startup_config.load_yolo:
         if DEVICE.type == "cpu":
             yolov8 = YOLO(startup_config.weights_yolo).to(DEVICE)
         else:
