@@ -30,6 +30,7 @@ from team_code.ONE_PEACE.one_peace.models import from_pretrained
 from team_code.ONE_PEACE.one_peace.models.one_peace.hub_interface import OnePeaceHubInterface
 from dataclasses import dataclass
 import startup_config
+from torchvision.transforms import InterpolationMode
 
 DEVICE = torch.device("cuda:0")
 # DEVICE = torch.device("cpu")
@@ -342,6 +343,74 @@ def process_image(image_fname: str) -> torch.Tensor:
         image_tensor = transform(img)
         
     return image_tensor
+
+def detect_and_crop_objects(image_fname: str, model: MultimodalModel):
+    cropped_images = []
+
+    for image_fname in image_fnames:
+        # Load image
+        image = Image.open(image_fname)
+
+        # Preprocess image for YOLOv8
+        inputs = model.yolov8_processor(images=image, return_tensors="pt", size=416)
+        inputs = {k: v.to(model.yolov8_model.device) for k, v in inputs.items()}
+
+        # Run object detection
+        with torch.no_grad():
+            outputs = model.yolov8_model(**inputs)
+
+        # Postprocess detections
+        detections = yolov8_processor.postprocess(outputs, inputs["image_sizes"])
+        for detection in detections:
+            # Get bounding box coordinates
+            x_min, y_min, x_max, y_max = detection["boxes"].tolist()
+
+            # Crop object from image and append to list
+            cropped_image = image.crop((x_min, y_min, x_max, y_max))
+            cropped_images.append(cropped_image)
+
+    return cropped_images
+
+
+def process_yolo_image_for_one_peace(image_list: List[PIL.Image], device="cuda:0", return_image_sizes=False) -> List[torch.Tensor]:
+    def cast_data_dtype(self, t):
+        if self.dtype == "bf16":
+            return t.to(dtype=torch.bfloat16)
+        elif self.dtype == "fp16":
+            return t.to(dtype=torch.half)
+        else:
+            return t
+
+    CLIP_DEFAULT_MEAN = (0.48145466, 0.4578275, 0.40821073)
+    CLIP_DEFAULT_STD = (0.26862954, 0.26130258, 0.27577711)
+    mean = CLIP_DEFAULT_MEAN
+    std = CLIP_DEFAULT_STD
+    transform = transforms.Compose([
+        transforms.Resize(
+            (cfg.task.patch_image_size, cfg.task.patch_image_size),
+            interpolation=InterpolationMode.BICUBIC
+        ),
+        transforms.ToTensor(),
+        transforms.Normalize(mean=mean, std=std)
+    ])
+    patch_images_list = []
+    image_width_list = []
+    image_height_list = []
+    for f_image in image_list:
+        image = f_image.convert("RGB")
+        w, h = image.size
+        patch_image = transform(image)
+        patch_images_list.append(patch_image)
+        image_width_list.append(w)
+        image_height_list.append(h)
+    src_images = torch.stack(patch_images_list, dim=0).to(device)
+    src_images = cast_data_dtype(src_images)
+    if return_image_sizes:
+        image_widths = torch.tensor(image_width_list).to(device)
+        image_heights = torch.tensor(image_height_list).to(device)
+        return src_images, image_widths, image_heights
+    else:
+        return src_images
 
 
 def load_images(image_file_list: List[str]):
@@ -813,6 +882,19 @@ def setup_model_and_tokenizer() -> Tuple[MultimodalModel, AutoTokenizer]:
     else:
         trocr_processor = None
         trocr_model = None
+
+    # Load YOLOv8 model and processor
+    if startup_config.load_yolov8:
+        yolov8_processor = YOLOv8Processor.from_pretrained((startup_config.weights_yolo))
+        if DEVICE.type == "cpu":
+            yolov8_model = YOLOv8ForImageObjectDetection.from_pretrained(yolov8_dirname).to(DEVICE)
+        else:
+            yolov8_model = YOLOv8ForImageObjectDetection.from_pretrained(yolov8_dirname, torch_dtype=torch.float16).to(DEVICE)
+        conversation_logger.info('The YOLOv8 model is loaded.')
+    else:
+        yolov8_processor = None
+        yolov8_model = None
+
     translate_ruen = pipeline("translation", model=startup_config.weights_ruen, device=DEVICE)
     translate_enru = pipeline("translation", model=startup_config.weights_enru, device=DEVICE)
     conversation_logger.info('The Translation models are loaded.')
@@ -830,6 +912,7 @@ def setup_model_and_tokenizer() -> Tuple[MultimodalModel, AutoTokenizer]:
         llm=llm_model,
         translate_ruen=translate_ruen,
         translate_enru=translate_enru,
+        yolov8=(yolov8_processor, yolov8_model),
     )
     gc.collect()
     return full_pipeline_for_conversation, llm_processor
