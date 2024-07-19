@@ -371,7 +371,6 @@ def generate_answer_based_on_prompt(prompt: str, model: LlavaNextForConditionalG
         )
         input_ids = [torch.tensor(data=tokenized_text['input_ids'], dtype=torch.long)]
         attention_mask = [torch.tensor(data=tokenized_text['attention_mask'], dtype=torch.long)]
-        images = tokenized_text['images'] if tokenized_text['images'] else None
         del tokenized_text
         batched_input_ids = torch.nn.utils.rnn.pad_sequence(
             input_ids,
@@ -382,7 +381,7 @@ def generate_answer_based_on_prompt(prompt: str, model: LlavaNextForConditionalG
             batch_first=True, padding_value=0
         ).to(DEVICE)[:,:-1]
         generated_ids = model.generate(
-            input_ids=batched_input_ids, attention_mask=batched_attention_mask, images=images,
+            input_ids=batched_input_ids, attention_mask=batched_attention_mask,
             max_new_tokens=1000, do_sample=True
         )
         del batched_input_ids, batched_attention_mask
