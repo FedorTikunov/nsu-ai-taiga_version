@@ -2,10 +2,11 @@ import flask
 import logging
 from flask import request
 import config
+import startup_config
 from pathlib import Path
 
 
-if config.debug:
+if startup_config.debug:
     from debug.testing import setup_model_and_tokenizer, generate_text
 else:
     from team_code.generate import setup_model_and_tokenizer, generate_text
