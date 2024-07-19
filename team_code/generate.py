@@ -233,7 +233,7 @@ def find_text_by_image(input_text: str, image_fname: str, model: MultimodalModel
                 text_vector = model.pca.transform(text_features.cpu().type(torch.FloatTensor).numpy()[0:1])[0]
                 del text_features
                 vectors.append(text_vector)
-                weights.append(config.annoy_vector_weights['caption'])
+                weights.append(config.annoy_caption_weight)
             if input_text:
                 src_tokens = model.one_peace.process_text([image_caption])
                 with torch.no_grad():
@@ -242,7 +242,7 @@ def find_text_by_image(input_text: str, image_fname: str, model: MultimodalModel
                 text_vector = model.pca.transform(text_features.cpu().type(torch.FloatTensor).numpy()[0:1])[0]
                 del text_features
                 vectors.append(text_vector)
-                weights.append(config.annoy_vector_weights['input'])
+                weights.append(config.annoy_input_weight)
             if trocr_text:
                 src_tokens = model.one_peace.process_text([trocr_text])
                 with torch.no_grad():
@@ -251,7 +251,7 @@ def find_text_by_image(input_text: str, image_fname: str, model: MultimodalModel
                 text_vector = model.pca.transform(text_features.cpu().type(torch.FloatTensor).numpy()[0:1])[0]
                 del text_features
                 vectors.append(text_vector)
-                weights.append(config.annoy_vector_weights['ocr'])
+                weights.append(config.annoy_ocr_weight)
             src_images = model.one_peace.process_image([image_fname])
             with torch.no_grad():
                 image_features = model.one_peace.extract_image_features(src_images)
@@ -259,7 +259,7 @@ def find_text_by_image(input_text: str, image_fname: str, model: MultimodalModel
             image_vector = model.pca.transform(image_features.cpu().type(torch.FloatTensor).numpy()[0:1])[0]
             del image_features
             vectors.append(image_vector)
-            weights.append(config.annoy_vector_weights['image'])
+            weights.append(config.annoy_image_weight)
 
             found_indices = model.annoy_index.get_nns_by_vector(np.average(vectors, axis=0, weights=weights), n=config.max_wiki_paragraphs, search_k=config.annoy_search_k)[:config.include_n_texts]
             del vectors
@@ -884,7 +884,7 @@ def get_ppl(model: MultimodalModel, processor: LlavaNextProcessor,
     shift_logits = out_logits[..., : -1, :].contiguous()
     labels = processor.encode(cur_query_tuple[1], add_special_tokens=False, return_tensors="pt")
     context_before_labels = torch.LongTensor([-100] * dialogue_emb.shape[1]).unsqueeze(0)
-    labels = torch.cat([context_before_labels, labels], dim=1).to(llm.device)
+    labels = torch.cat([context_before_labels, labels], dim=1).to(model.llm.device)
     shift_labels = labels[..., 1:].contiguous()
     
     neg_log_likelihood = loss(shift_logits.transpose(1, 2), shift_labels)
