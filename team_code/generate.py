@@ -405,7 +405,7 @@ def detect_and_crop_objects(image_fname: str, model: MultimodalModel):
 
     # # Postprocess detections
     # detections =  model.yolo.processor.postprocess(outputs, inputs["image_sizes"])
-    prediction: Results = model.yolo(image, stream=True)[0]
+    prediction: Results = model.yolo(image)[0]
     for box in prediction.boxes:
         # Get bounding box coordinates
         x_min, y_min, x_max, y_max = box.xyxy[0]
