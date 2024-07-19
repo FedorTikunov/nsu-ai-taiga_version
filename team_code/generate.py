@@ -36,6 +36,8 @@ from PIL.ImageFile import ImageFile
 DEVICE = torch.device("cuda:0")
 # DEVICE = torch.device("cpu")
 TARGET_SAMPLING_FREQUENCY = 16_000
+from ultralytics.engine.results import Results
+
 
 @dataclass
 class MultimodalModel:
@@ -388,7 +390,6 @@ def process_image(image_fname: str) -> torch.Tensor:
     return image_tensor
 
 def detect_and_crop_objects(image_fname: str, model: MultimodalModel):
-    from ultralytics.engine.model import Results
     cropped_images = []
 
     # Load image
@@ -407,7 +408,7 @@ def detect_and_crop_objects(image_fname: str, model: MultimodalModel):
     prediction: Results = model.yolo(image, stream=True)[0]
     for box in prediction.boxes:
         # Get bounding box coordinates
-        x_min, y_min, x_max, y_max = box
+        x_min, y_min, x_max, y_max = box.xyxy
 
         # Crop object from image and append to list
         cropped_image = image.crop((x_min, y_min, x_max, y_max))
