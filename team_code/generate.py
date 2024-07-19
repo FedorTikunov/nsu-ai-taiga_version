@@ -794,11 +794,7 @@ def setup_model_and_tokenizer() -> Tuple[MultimodalModel, AutoTokenizer]:
         llm_processor= LlavaNextProcessor.from_pretrained(llm_dirname)
         conversation_logger.info('The large language model is loaded.')
     elif startup_config.llm_type == "mistral":
-        llm_dirname = os.path.join(model_dir, 'llm')
-        if not os.path.isdir(llm_dirname):
-            err_msg = f'The directory "{llm_dirname}" does not exist!'
-            conversation_logger.error(err_msg)
-            raise ValueError(err_msg)
+        llm_dirname = startup_config.weights_mistral
 
         if DEVICE.type == "cpu":
             llm_model = AutoModelForCausalLM.from_pretrained(llm_dirname).to(DEVICE)
