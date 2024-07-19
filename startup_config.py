@@ -10,3 +10,4 @@ load_one_peace = True
 load_blit = True
 load_ocr = True
 load_sbert = True
+llm_type = "llava" # or "mistral"

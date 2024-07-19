@@ -7,6 +7,7 @@ import sys
 import tempfile
 from typing import Dict, List, Tuple
 from transformers import TrOCRProcessor, VisionEncoderDecoderModel
+from transformers import AutoModelForCausalLM
 from transformers import LlavaNextForConditionalGeneration, LlavaNextProcessor
 import numpy as np
 from annoy import AnnoyIndex
@@ -361,61 +362,54 @@ def tokenize_prompt(prompt: str, image_file_list: List[str], tokenizer: AutoToke
     result['images'] = [process_image(image_fname) for image_fname in image_file_list if process_image(image_fname) is not None]
     return result
 
-def generate_answer_based_on_prompt(prompt: str, image_file_list: List[str], model: LlavaNextForConditionalGeneration, processor: LlavaNextProcessor) -> str:
-    '''
-    tokenized_text = tokenize_prompt(
-        prompt,
-        image_file_list,
-        tokenizer,
-        add_labels=False
-    )
-    input_ids = [torch.tensor(data=tokenized_text['input_ids'], dtype=torch.long)]
-    attention_mask = [torch.tensor(data=tokenized_text['attention_mask'], dtype=torch.long)]
-    images = tokenized_text['images'] if tokenized_text['images'] else None
-    del tokenized_text
-    '''
-    # TEMP!!! DO NOT USE Image.open. 
+def generate_answer_based_on_prompt(prompt: str, model: LlavaNextForConditionalGeneration, processor: LlavaNextProcessor, image_file_list: List[str] = []) -> str:
+        
+    if startup_config.llm_type == "mistral":
+        tokenized_text = tokenize_prompt(
+            prompt,
+            image_file_list,
+            processor,
+            add_labels=False
+        )
+        input_ids = [torch.tensor(data=tokenized_text['input_ids'], dtype=torch.long)]
+        attention_mask = [torch.tensor(data=tokenized_text['attention_mask'], dtype=torch.long)]
+        images = tokenized_text['images'] if tokenized_text['images'] else None
+        del tokenized_text
+        batched_input_ids = torch.nn.utils.rnn.pad_sequence(
+            input_ids,
+            batch_first=True, padding_value=0  # <unk> idx
+        ).to(DEVICE)[:,:-1]
+        batched_attention_mask = torch.nn.utils.rnn.pad_sequence(
+            attention_mask,
+            batch_first=True, padding_value=0
+        ).to(DEVICE)[:,:-1]
+        generated_ids = model.generate(
+            input_ids=batched_input_ids, attention_mask=batched_attention_mask, images=images,
+            max_new_tokens=1000, do_sample=True
+        )
+        del batched_input_ids, batched_attention_mask
+        
+        predicted_text = processor.batch_decode(generated_ids, skip_special_tokens=True)[0]
+        input_prompt = processor.batch_decode(input_ids, skip_special_tokens=True)[0]
+        
+        del input_ids, attention_mask, generated_ids
 
-    images = load_images(image_file_list)
-    
-    inputs = processor(text=prompt, images=images, return_tensors="pt").to(DEVICE)
-    '''
-    batched_input_ids = torch.nn.utils.rnn.pad_sequence(
-        input_ids,
-        batch_first=True, padding_value=0  # <unk> idx
-    ).to(DEVICE)[:,:-1]
-    batched_attention_mask = torch.nn.utils.rnn.pad_sequence(
-        attention_mask,
-        batch_first=True, padding_value=0
-    ).to(DEVICE)[:,:-1]
-    '''
-    
-    '''
-    generated_ids = model.generate(
-        input_ids=batched_input_ids, attention_mask=batched_attention_mask, images=images,
-        max_new_tokens=1000, do_sample=True
-    )
-    '''
-    
-    generated_ids = model.generate(**inputs, max_new_tokens=1000, do_sample=True)
+    elif startup_config.llm_type == "llava":
+        images = load_images(image_file_list)
+        
+        inputs = processor(text=prompt, images=images, return_tensors="pt").to(DEVICE)
+        generated_ids = model.generate(**inputs, max_new_tokens=1000, do_sample=True)
 
-    predicted_text = processor.batch_decode(generated_ids, skip_special_tokens=True, clean_up_tokenization_spaces=False)[0]
-    input_prompt = processor.decode(inputs["input_ids"][0], skip_special_tokens=True)
-    
-    #del batched_input_ids, batched_attention_mask
-    
-    #predicted_text = tokenizer.batch_decode(generated_ids, skip_special_tokens=True)[0]
-    #input_prompt = tokenizer.batch_decode(input_ids, skip_special_tokens=True)[0]
-    
-    #del input_ids, attention_mask, generated_ids
-    
+        predicted_text = processor.batch_decode(generated_ids, skip_special_tokens=True, clean_up_tokenization_spaces=False)[0]
+        input_prompt = processor.decode(inputs["input_ids"][0], skip_special_tokens=True)
+        
     if len(predicted_text) < len(input_prompt):
         err_msg = (f'The predicted answer "{predicted_text}" does not correct, '
-                   f'because it does not start with the prompt "{input_prompt}".')
+                f'because it does not start with the prompt "{input_prompt}".')
         raise ValueError(err_msg)
     if not predicted_text.startswith(input_prompt):
         err_msg = (f'The predicted answer "{predicted_text}" does not correct, '
-                   f'because it does not start with the prompt "{input_prompt}".')
+                f'because it does not start with the prompt "{input_prompt}".')
         raise ValueError(err_msg)
 
     return ' '.join(predicted_text[len(input_prompt):].split()).strip()
@@ -787,20 +781,36 @@ def setup_model_and_tokenizer() -> Tuple[MultimodalModel, AutoTokenizer]:
     else:
         sentence_embedder = None
 
-    llm_dirname = startup_config.llava_weights
-    if not os.path.isdir(llm_dirname):
-        err_msg = f'The directory "{llm_dirname}" does not exist!'
-        conversation_logger.error(err_msg)
-        raise ValueError(err_msg)
+    if startup_config.llm_type == "llava":
+        llm_dirname = startup_config.llava_weights
+        if not os.path.isdir(llm_dirname):
+            err_msg = f'The directory "{llm_dirname}" does not exist!'
+            conversation_logger.error(err_msg)
+            raise ValueError(err_msg)
 
-    if DEVICE.type == "cpu":
-        llm_model = LlavaNextForConditionalGeneration.from_pretrained(llm_dirname).to(DEVICE)
-    else:
-        llm_model = LlavaNextForConditionalGeneration.from_pretrained(llm_dirname, torch_dtype=torch.float16, device_map={"":0})
+        if DEVICE.type == "cpu":
+            llm_model = LlavaNextForConditionalGeneration.from_pretrained(llm_dirname).to(DEVICE)
+        else:
+            llm_model = LlavaNextForConditionalGeneration.from_pretrained(llm_dirname, torch_dtype=torch.float16, device_map={"":0})
 
-    llm_model.eval()
-    llm_processor= LlavaNextProcessor.from_pretrained(llm_dirname)
-    conversation_logger.info('The large language model is loaded.')
+        llm_model.eval()
+        llm_processor= LlavaNextProcessor.from_pretrained(llm_dirname)
+        conversation_logger.info('The large language model is loaded.')
+    elif startup_config.llm_type == "mistral":
+        llm_dirname = os.path.join(model_dir, 'llm')
+        if not os.path.isdir(llm_dirname):
+            err_msg = f'The directory "{llm_dirname}" does not exist!'
+            conversation_logger.error(err_msg)
+            raise ValueError(err_msg)
+
+        if DEVICE.type == "cpu":
+            llm_model = AutoModelForCausalLM.from_pretrained(llm_dirname).to(DEVICE)
+        else:
+            llm_model = AutoModelForCausalLM.from_pretrained(llm_dirname, torch_dtype=torch.float16, device_map={"":0})
+
+        llm_model.eval()
+        llm_processor = AutoTokenizer.from_pretrained(llm_dirname)
+        conversation_logger.info('The large language model is loaded.')
 
     # Load TrOCR model and processor
     if startup_config.load_ocr:
