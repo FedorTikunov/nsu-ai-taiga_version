@@ -275,7 +275,7 @@ def find_text_by_image(input_text: str, image_fname: str, model: MultimodalModel
             if config.use_yolo and startup_config.load_yolo and config.merge_yolo_objects:
                 for src_image in crop_src_images:
                     with torch.no_grad():
-                        image_features = model.one_peace.extract_image_features([src_image])
+                        image_features = model.one_peace.extract_image_features(src_image)
                         image_vector = model.pca.transform(image_features.cpu().type(torch.FloatTensor).numpy()[0:1])[0]
                         del image_features
                         vectors.append(image_vector)
@@ -291,7 +291,7 @@ def find_text_by_image(input_text: str, image_fname: str, model: MultimodalModel
                 yolo_texts = []
                 for src_image in crop_src_images:
                     with torch.no_grad():
-                        image_features = model.one_peace.extract_image_features([src_image])
+                        image_features = model.one_peace.extract_image_features(src_image)
                         image_vector = model.pca.transform(image_features.cpu().type(torch.FloatTensor).numpy()[0:1])[0]
                         del image_features
                         found_indices = model.annoy_index.get_nns_by_vector(image_vector, n=config.max_wiki_paragraphs, search_k=config.annoy_search_k)
@@ -313,7 +313,7 @@ def find_text_by_image(input_text: str, image_fname: str, model: MultimodalModel
             if config.use_yolo and startup_config.load_yolo:
                 for src_image in crop_src_images:
                     with torch.no_grad():
-                        image_features = model.one_peace.extract_image_features([src_image])
+                        image_features = model.one_peace.extract_image_features(src_image)
                         image_vector = model.pca.transform(image_features.cpu().type(torch.FloatTensor).numpy()[0:1])[0]
                         del image_features
                         found_indices = model.annoy_index.get_nns_by_vector(image_vector, n=config.max_wiki_paragraphs, search_k=config.annoy_search_k)
