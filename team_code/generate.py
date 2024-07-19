@@ -221,7 +221,13 @@ def find_text_by_image(input_text: str, image_fname: str, model: MultimodalModel
         trocr_text = f'Image has such text: "{trocr_text}"'
     else:
         trocr_text = ''
-    
+
+    if config.use_yolo and startup_config.load_yolo:
+        crop_image_list = detect_and_crop_objects(image_fname, model)
+        crop_src_images = process_yolo_image_for_one_peace(crop_image_list)
+    else:
+        crop_src_images = []
+
     if config.use_one_peace and startup_config.load_one_peace:
         if config.use_annoy_dist:
             vectors = []
@@ -277,10 +283,22 @@ def find_text_by_image(input_text: str, image_fname: str, model: MultimodalModel
             found_texts = [model.texts[idx] for idx in found_indices]
             del found_indices
             long_text = find_long_text_similar_to_short_text(image_caption, found_texts, model)
+            if config.use_yolo and startup_config.load_yolo:
+                for src_image in crop_src_images:
+                    with torch.no_grad():
+                        image_features = model.one_peace.extract_image_features([src_image])
+                        image_vector = model.pca.transform(image_features.cpu().type(torch.FloatTensor).numpy()[0:1])[0]
+                        del image_features
+                        found_indices = model.annoy_index.get_nns_by_vector(image_vector, n=config.max_wiki_paragraphs, search_k=config.annoy_search_k)
+                        found_texts = [model.texts[idx] for idx in found_indices]
+                        del found_indices
+                        long_text = long_text + ". " + find_long_text_similar_to_short_text(image_caption, found_texts, model)
+                del crop_src_images
             # long_text = model.texts[found_indices[0]]
             del image_vector, found_indices
     else:
         long_text = ''
+        del crop_src_images
 
     result = ". ".join(filter(bool, (image_caption, long_text, trocr_text)))
     
@@ -347,27 +365,26 @@ def process_image(image_fname: str) -> torch.Tensor:
 def detect_and_crop_objects(image_fname: str, model: MultimodalModel):
     cropped_images = []
 
-    for image_fname in image_fnames:
-        # Load image
-        image = Image.open(image_fname)
+    # Load image
+    image = Image.open(image_fname)
 
-        # Preprocess image for YOLOv8
-        inputs = model.yolov8_processor(images=image, return_tensors="pt", size=416)
-        inputs = {k: v.to(model.yolov8_model.device) for k, v in inputs.items()}
+    # Preprocess image for YOLOv8
+    inputs = model.yolov8_processor(images=image, return_tensors="pt", size=416)
+    inputs = {k: v.to(model.yolov8_model.device) for k, v in inputs.items()}
 
-        # Run object detection
-        with torch.no_grad():
+    # Run object detection
+    with torch.no_grad():
             outputs = model.yolov8_model(**inputs)
 
-        # Postprocess detections
-        detections = yolov8_processor.postprocess(outputs, inputs["image_sizes"])
-        for detection in detections:
-            # Get bounding box coordinates
-            x_min, y_min, x_max, y_max = detection["boxes"].tolist()
+    # Postprocess detections
+    detections = yolov8_processor.postprocess(outputs, inputs["image_sizes"])
+    for detection in detections:
+    # Get bounding box coordinates
+    x_min, y_min, x_max, y_max = detection["boxes"].tolist()
 
-            # Crop object from image and append to list
-            cropped_image = image.crop((x_min, y_min, x_max, y_max))
-            cropped_images.append(cropped_image)
+    # Crop object from image and append to list
+    cropped_image = image.crop((x_min, y_min, x_max, y_max))
+    cropped_images.append(cropped_image)
 
     return cropped_images
 

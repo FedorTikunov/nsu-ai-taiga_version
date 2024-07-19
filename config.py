@@ -5,6 +5,7 @@ bot_use_history = True
 use_one_peace = True
 use_blit = True
 use_ocr = True
+use_yolo = True
 max_wiki_paragraphs = 10
 annoy_search_k = -1
 use_annoy_dist = True
