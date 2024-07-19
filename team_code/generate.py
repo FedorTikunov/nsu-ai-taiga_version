@@ -236,7 +236,7 @@ def find_text_by_image(input_text: str, image_fname: str, model: MultimodalModel
                 vectors.append(text_vector)
                 weights.append(config.annoy_caption_weight)
             if input_text:
-                src_tokens = model.one_peace.process_text([image_caption])
+                src_tokens = model.one_peace.process_text([input_text])
                 with torch.no_grad():
                     text_features = model.one_peace.extract_text_features(src_tokens)
                 del src_tokens
