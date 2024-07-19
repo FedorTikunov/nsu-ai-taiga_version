@@ -32,6 +32,7 @@ from dataclasses import dataclass
 import startup_config
 from torchvision.transforms import InterpolationMode
 from ultralytics import YOLO
+from PIL.ImageFile import ImageFile
 DEVICE = torch.device("cuda:0")
 # DEVICE = torch.device("cpu")
 TARGET_SAMPLING_FREQUENCY = 16_000
@@ -411,7 +412,7 @@ def detect_and_crop_objects(image_fname: str, model: MultimodalModel):
 
     return cropped_images
 
-def process_yolo_image_for_one_peace(image_list: List[Image.ImageFile.ImageFile], device="cuda:0", return_image_sizes=False) -> List[torch.Tensor]:
+def process_yolo_image_for_one_peace(image_list: List[ImageFile], device="cuda:0", return_image_sizes=False) -> List[torch.Tensor]:
     def cast_data_dtype(self, t):
         if self.dtype == "bf16":
             return t.to(dtype=torch.bfloat16)
