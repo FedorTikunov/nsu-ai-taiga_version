@@ -148,8 +148,13 @@ def clear_context():
 @app.route("/set_param", methods=['POST'])
 def set_param():
     if "param" in request.form and "value" in request.form:
-        config.__dict__[request.form['param']] = request.form['value']
-        return f"Значение {request.form['param']} установлено в {request.form['value']}"
+        value = request.form['value']
+        try:
+            value = int(value)
+        except:
+            pass
+        config.__dict__[request.form['param']] = value
+        return f"Значение {request.form['param']} установлено в {value}"
     return "Промт не установлен"
 
 @app.route("/get_param", methods=['POST'])
