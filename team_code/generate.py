@@ -929,7 +929,7 @@ def setup_model_and_tokenizer() -> Tuple[MultimodalModel, AutoTokenizer]:
         if DEVICE.type == "cpu":
             yolov8 = YOLO(startup_config.weights_yolo).to(DEVICE)
         else:
-            yolov8 = YOLO(startup_config.weights_yolo, torch_dtype=torch.float16).to(DEVICE)
+            yolov8 = YOLO(startup_config.weights_yolo).to(DEVICE)
         conversation_logger.info('The YOLOv8 model is loaded.')
     else:
         yolov8 = None
