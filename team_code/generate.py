@@ -31,7 +31,7 @@ from team_code.ONE_PEACE.one_peace.models.one_peace.hub_interface import OnePeac
 from dataclasses import dataclass
 import startup_config
 from torchvision.transforms import InterpolationMode
-
+from ultralytics import YOLO
 DEVICE = torch.device("cuda:0")
 # DEVICE = torch.device("cpu")
 TARGET_SAMPLING_FREQUENCY = 16_000
@@ -369,22 +369,22 @@ def detect_and_crop_objects(image_fname: str, model: MultimodalModel):
     image = Image.open(image_fname)
 
     # Preprocess image for YOLOv8
-    inputs = model.yolov8_processor(images=image, return_tensors="pt", size=416)
+    inputs = model.yolo.processor(images=image, return_tensors="pt", size=416)
     inputs = {k: v.to(model.yolov8_model.device) for k, v in inputs.items()}
 
     # Run object detection
     with torch.no_grad():
-            outputs = model.yolov8_model(**inputs)
+            outputs = model.yolo(**inputs)
 
     # Postprocess detections
-    detections = yolov8_processor.postprocess(outputs, inputs["image_sizes"])
+    detections =  model.processor.postprocess(outputs, inputs["image_sizes"])
     for detection in detections:
-    # Get bounding box coordinates
-    x_min, y_min, x_max, y_max = detection["boxes"].tolist()
+        # Get bounding box coordinates
+        x_min, y_min, x_max, y_max = detection["boxes"].tolist()
 
-    # Crop object from image and append to list
-    cropped_image = image.crop((x_min, y_min, x_max, y_max))
-    cropped_images.append(cropped_image)
+        # Crop object from image and append to list
+        cropped_image = image.crop((x_min, y_min, x_max, y_max))
+        cropped_images.append(cropped_image)
 
     return cropped_images
 
@@ -902,15 +902,13 @@ def setup_model_and_tokenizer() -> Tuple[MultimodalModel, AutoTokenizer]:
 
     # Load YOLOv8 model and processor
     if startup_config.load_yolov8:
-        yolov8_processor = YOLOv8Processor.from_pretrained((startup_config.weights_yolo))
         if DEVICE.type == "cpu":
-            yolov8_model = YOLOv8ForImageObjectDetection.from_pretrained(yolov8_dirname).to(DEVICE)
+            yolov8 = YOLO.from_pretrained(startup_config.weights_yolo).to(DEVICE)
         else:
-            yolov8_model = YOLOv8ForImageObjectDetection.from_pretrained(yolov8_dirname, torch_dtype=torch.float16).to(DEVICE)
+            yolov8 = YOLO.from_pretrained(startup_config.weights_yolo, torch_dtype=torch.float16).to(DEVICE)
         conversation_logger.info('The YOLOv8 model is loaded.')
     else:
-        yolov8_processor = None
-        yolov8_model = None
+        yolov8 = None
 
     translate_ruen = pipeline("translation", model=startup_config.weights_ruen, device=DEVICE)
     translate_enru = pipeline("translation", model=startup_config.weights_enru, device=DEVICE)
@@ -929,7 +927,7 @@ def setup_model_and_tokenizer() -> Tuple[MultimodalModel, AutoTokenizer]:
         llm=llm_model,
         translate_ruen=translate_ruen,
         translate_enru=translate_enru,
-        yolov8=(yolov8_processor, yolov8_model),
+        yolo=yolov8,
     )
     gc.collect()
     return full_pipeline_for_conversation, llm_processor
