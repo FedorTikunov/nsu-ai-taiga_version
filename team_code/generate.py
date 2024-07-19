@@ -351,7 +351,7 @@ def load_images(image_file_list: List[str]):
         return None
     return [np.array(Image.open(file).convert("RGB")) for file in image_file_list]
 
-def tokenize_prompt(prompt: str, image_file_list: List[str], tokenizer: AutoTokenizer, add_eos_token: bool = True,
+def tokenize_prompt(prompt: str, tokenizer: AutoTokenizer, add_eos_token: bool = True,
                     add_labels: bool=True) -> Dict[str, Tuple[List[int], List[torch.Tensor]]]:
     result = tokenizer(prompt, padding=False, return_tensors=None)
     if (result['input_ids'][-1] != tokenizer.eos_token_id) and add_eos_token:
@@ -359,7 +359,6 @@ def tokenize_prompt(prompt: str, image_file_list: List[str], tokenizer: AutoToke
         result['attention_mask'].append(1)
     if add_labels:
         result['labels'] = result['input_ids'].copy()
-    result['images'] = [process_image(image_fname) for image_fname in image_file_list if process_image(image_fname) is not None]
     return result
 
 def generate_answer_based_on_prompt(prompt: str, model: LlavaNextForConditionalGeneration, processor: LlavaNextProcessor, image_file_list: List[str] = []) -> str:
@@ -367,7 +366,6 @@ def generate_answer_based_on_prompt(prompt: str, model: LlavaNextForConditionalG
     if startup_config.llm_type == "mistral":
         tokenized_text = tokenize_prompt(
             prompt,
-            image_file_list,
             processor,
             add_labels=False
         )
