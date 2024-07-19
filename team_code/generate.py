@@ -228,9 +228,8 @@ def find_text_by_image(input_text: str, image_fname: str, model: MultimodalModel
 
     if config.use_yolo and startup_config.load_yolo:
         crop_image_list = detect_and_crop_objects(image_fname, model)
-        crop_src_images = process_yolo_image_for_one_peace(crop_image_list, device=model.one_peace.device, dtype=model.one_peace.dtype)
     else:
-        crop_src_images = []
+        crop_image_list = []
 
     if config.use_one_peace and startup_config.load_one_peace:
         if config.use_annoy_dist:
@@ -273,14 +272,14 @@ def find_text_by_image(input_text: str, image_fname: str, model: MultimodalModel
             weights.append(config.annoy_image_weight)
 
             if config.use_yolo and startup_config.load_yolo and config.merge_yolo_objects:
-                for src_image in crop_src_images:
+                for crop_image in crop_image_list:
+                    src_image = process_yolo_image_for_one_peace([crop_image], device=model.one_peace.device, dtype=model.one_peace.dtype)
                     with torch.no_grad():
                         image_features = model.one_peace.extract_image_features(src_image)
                         image_vector = model.pca.transform(image_features.cpu().type(torch.FloatTensor).numpy()[0:1])[0]
                         del image_features
                         vectors.append(image_vector)
                         weights.append(config.yolo_objects_weight)
-                del crop_src_images
 
             found_indices = model.annoy_index.get_nns_by_vector(np.average(vectors, axis=0, weights=weights), n=config.max_wiki_paragraphs, search_k=config.annoy_search_k)[:config.include_n_texts]
             del vectors
@@ -289,7 +288,8 @@ def find_text_by_image(input_text: str, image_fname: str, model: MultimodalModel
 
             if config.use_yolo and startup_config.load_yolo and not config.merge_yolo_objects:
                 yolo_texts = []
-                for src_image in crop_src_images:
+                for crop_image in crop_image_list:
+                    src_image = process_yolo_image_for_one_peace([crop_image], device=model.one_peace.device, dtype=model.one_peace.dtype)
                     with torch.no_grad():
                         image_features = model.one_peace.extract_image_features(src_image)
                         image_vector = model.pca.transform(image_features.cpu().type(torch.FloatTensor).numpy()[0:1])[0]
@@ -297,7 +297,6 @@ def find_text_by_image(input_text: str, image_fname: str, model: MultimodalModel
                         found_indices = model.annoy_index.get_nns_by_vector(image_vector, n=config.max_wiki_paragraphs, search_k=config.annoy_search_k)
                         yolo_texts.append(model.texts[found_indices[0]])
                         del found_indices
-                del crop_src_images
                 long_text = long_text + " Image has objects with description: " + " ".join(yolo_texts)
         else:
             src_images = model.one_peace.process_image([image_fname])
@@ -311,7 +310,8 @@ def find_text_by_image(input_text: str, image_fname: str, model: MultimodalModel
             del found_indices
             long_text = find_long_text_similar_to_short_text(image_caption, found_texts, model)
             if config.use_yolo and startup_config.load_yolo:
-                for src_image in crop_src_images:
+                for crop_image in crop_image_list:
+                    src_image = process_yolo_image_for_one_peace([crop_image], device=model.one_peace.device, dtype=model.one_peace.dtype)
                     with torch.no_grad():
                         image_features = model.one_peace.extract_image_features(src_image)
                         image_vector = model.pca.transform(image_features.cpu().type(torch.FloatTensor).numpy()[0:1])[0]
@@ -320,12 +320,10 @@ def find_text_by_image(input_text: str, image_fname: str, model: MultimodalModel
                         found_texts = [model.texts[idx] for idx in found_indices]
                         del found_indices
                         long_text = long_text.strip() + " Aditional text: " + find_long_text_similar_to_short_text(image_caption, found_texts, model)
-                del crop_src_images
             # long_text = model.texts[found_indices[0]]
             del image_vector, found_indices
     else:
         long_text = ''
-        del crop_src_images
 
     result = ". ".join(filter(bool, (image_caption, long_text, trocr_text)))
     

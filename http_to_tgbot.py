@@ -49,7 +49,7 @@ async def on_param_get(message: Message):
 @dp.message(Command(commands=['reload']))
 async def reload(message: Message):
     ans = requests.post(f"{sys.argv[1]}/reload")
-    await message.answer(ans)
+    await message.answer(ans.text)
 
 @dp.message()
 async def on_message(message: Message):
