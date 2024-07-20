@@ -1,4 +1,4 @@
-from team_code.generate import generate_full_prompt, generate_answer_based_on_prompt, load_images, MultimodalModel, DEVICE
+from team_code.generate import setup_model_and_tokenizer, generate_full_prompt, generate_answer_based_on_prompt, load_images, MultimodalModel, DEVICE
 import json
 from peft import LoraConfig, PeftModel, prepare_model_for_kbit_training, get_peft_model
 from transformers import AutoModelForCausalLM
@@ -6,6 +6,7 @@ from transformers import LlavaNextForConditionalGeneration, LlavaNextProcessor
 from torch.utils.data import Dataset, DataLoader
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer, Trainer, TrainingArguments
+import sys
 
 class Llava_finetuning_Dataset(Dataset):
     def __init__(self, json_file: str, processor: LlavaNextProcessor):
@@ -99,3 +100,10 @@ def train(model: MultimodalModel, processor: LlavaNextProcessor, batch_size: int
     )
     # Train the model
     trainer.train()
+
+if __name__ == "__main__":
+
+    model, processor = setup_model_and_tokenizer()
+    train_json_path = sys.argv[1]
+    eval_dataset = sys.argv[2]
+    train(model, processor, 16, 100, train_json_path, eval_dataset)
