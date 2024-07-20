@@ -3,6 +3,7 @@ import sys
 import os
 
 if "ONLYFANS_CFG" in os.environ:
+    print(f"Using env config: {os.environ['ONLYFANS_CFG']}")
     with open(os.environ["ONLYFANS_CFG"]) as f:
         config = json.load(f)["runtime"]
     d = locals()
@@ -10,6 +11,7 @@ if "ONLYFANS_CFG" in os.environ:
         # setattr(sys.modules[__name__], k, v)
         d[k] = v
 elif len(sys.argv) > 1 and os.path.exists(sys.argv[1]):
+    print(f"Using arg config: {sys.argv[1]}")
     with open(sys.argv[1]) as f:
         config = json.load(f)["runtime"]
     d = locals()
@@ -17,6 +19,7 @@ elif len(sys.argv) > 1 and os.path.exists(sys.argv[1]):
         # setattr(sys.modules[__name__], k, v)
         d[k] = v
 else:
+    print("Using default config")
     initial_promt = ('<s>[INST] You are a useful and friendly assistant with great erudition and '
                         'developed intelligence. You can keep up a conversation on various topics and even know '
                         'how to play complex intellectual games. ')
