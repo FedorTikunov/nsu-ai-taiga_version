@@ -27,6 +27,25 @@ async def on_history_set(message: Message):
     ans = requests.post(f"{sys.argv[1]}/set_param", data={"chat_id": message.chat.id, "param": "history", "value": value})
     await message.answer(ans.text)
 
+@dp.message(Command(commands=['set_param']))
+async def on_param_set(message: Message):
+    # value = bool(int(message.text.split()[1]))
+    _, param, *value = message.text.split()
+    value = " ".join(value)
+    try:
+        value = int(value)
+    except:
+        pass
+    ans = requests.post(f"{sys.argv[1]}/set_param", data={"chat_id": message.chat.id, "param": param, "value": value})
+    await message.answer(ans.text)
+
+@dp.message(Command(commands=['get_param']))
+async def on_param_get(message: Message):
+    # value = bool(int(message.text.split()[1]))
+    param = message.text.split()[1]
+    ans = requests.post(f"{sys.argv[1]}/get_param", data={"chat_id": message.chat.id, "param": param})
+    await message.answer(f"{param}: {ans.text}")
+
 @dp.message()
 async def on_message(message: Message):
     chat_id = message.chat.id

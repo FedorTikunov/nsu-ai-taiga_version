@@ -1,6 +1,5 @@
 import fileinput
 import pickle
-from collections import namedtuple
 import gc
 import logging
 import os
@@ -8,6 +7,7 @@ import sys
 import tempfile
 from typing import Dict, List, Tuple
 from transformers import TrOCRProcessor, VisionEncoderDecoderModel
+from transformers import AutoModelForCausalLM
 from transformers import LlavaNextForConditionalGeneration, LlavaNextProcessor
 import numpy as np
 from annoy import AnnoyIndex
@@ -27,15 +27,33 @@ from sentence_transformers import SentenceTransformer
 from PIL import Image
 import config
 from torchvision import transforms
+from team_code.ONE_PEACE.one_peace.models import from_pretrained
+from team_code.ONE_PEACE.one_peace.models.one_peace.hub_interface import OnePeaceHubInterface
+from dataclasses import dataclass
+import startup_config
 
 DEVICE = torch.device("cuda:0")
 # DEVICE = torch.device("cpu")
 TARGET_SAMPLING_FREQUENCY = 16_000
 
-MultimodalModel = namedtuple(
-    'MultimodalModel',
-    'image audio speech sbert one_peace pca annoy_index texts ocr llm translate_ruen translate_enru'
-)
+@dataclass
+class MultimodalModel:
+    image: Tuple[VisionEncoderDecoderModel, VisionEncoderDecoderModel]
+    audio: Tuple[VisionEncoderDecoderModel, VisionEncoderDecoderModel]
+    speech: VisionEncoderDecoderModel
+    sbert: SentenceTransformer
+    one_peace: OnePeaceHubInterface
+    pca: Pipeline
+    annoy_index: AnnoyIndex
+    texts: List[str]
+    ocr: TrOCRProcessor
+    llm: LlavaNextForConditionalGeneration
+    translate_ruen: pipeline
+    translate_enru: pipeline
+# MultimodalModel = namedtuple(
+#     'MultimodalModel',
+#     'image audio speech sbert one_peace pca annoy_index texts ocr llm translate_ruen translate_enru'
+# )
 conversation_logger = logging.getLogger(__name__)
 PUNCTUATION = {'.', '?', '!', ':', '-', ';'}
 CARDINAL_UNITS = {'1': 'one', '2': 'two', '3': 'three', '4': 'four', '5': 'five', '6': 'six', '7': 'seven',
@@ -177,7 +195,6 @@ def extract_text_with_trocr(image_fname: str, model: MultimodalModel) -> str:
 
     image = image.convert("RGB")
     
-    
     # Process the image
     pixel_values = model.ocr[0](image, return_tensors="pt").pixel_values
     pixel_values = pixel_values.to(DEVICE)
@@ -189,38 +206,88 @@ def extract_text_with_trocr(image_fname: str, model: MultimodalModel) -> str:
     return text
 
 
-def find_text_by_image(image_fname: str, model: MultimodalModel, top_n: int = 100, search_k: int = -1) -> str:
+def find_text_by_image(input_text: str, image_fname: str, model: MultimodalModel) -> str:
     if not os.path.isfile(image_fname):
         err_msg = f'The image "{image_fname}" does not exist!'
         conversation_logger.error(err_msg)
         raise ValueError(err_msg)
-    image_caption = generate_image_caption(image_fname, model)
-
-    trocr_text = extract_text_with_trocr(image_fname, model)
-    
-    src_images = model.one_peace.process_image([image_fname])
-    with torch.no_grad():
-        image_features = model.one_peace.extract_image_features(src_images)
-    del src_images
-    image_vector = model.pca.transform(image_features.cpu().type(torch.FloatTensor).numpy()[0:1])[0]
-    del image_features
-    found_indices = model.annoy_index.get_nns_by_vector(image_vector, n=top_n, search_k=search_k)
-    del image_vector
-    found_texts = [model.texts[idx] for idx in found_indices]
-    del found_indices
-    if len(found_texts) > 1:
-        result = image_caption + ' ' + find_long_text_similar_to_short_text(image_caption, found_texts, model)
+    if config.use_blit and startup_config.load_blit:
+        image_caption = generate_image_caption(image_fname, model)
     else:
-        result = image_caption + ' ' + found_texts[0]
+        image_caption = ''
 
-    if len(trocr_text) > 1:
-        result = result + ' Image has such text: ' + '"' + trocr_text + '"'
+    if config.use_ocr and startup_config.load_ocr:
+        trocr_text = extract_text_with_trocr(image_fname, model)
+        trocr_text = f'Image has such text: "{trocr_text}"'
+    else:
+        trocr_text = ''
+    
+    if config.use_one_peace and startup_config.load_one_peace:
+        if config.use_annoy_dist:
+            vectors = []
+            weights = []
+            if image_caption:
+                src_tokens = model.one_peace.process_text([image_caption])
+                with torch.no_grad():
+                    text_features = model.one_peace.extract_text_features(src_tokens)
+                del src_tokens
+                text_vector = model.pca.transform(text_features.cpu().type(torch.FloatTensor).numpy()[0:1])[0]
+                del text_features
+                vectors.append(text_vector)
+                weights.append(config.annoy_caption_weight)
+            if input_text:
+                src_tokens = model.one_peace.process_text([image_caption])
+                with torch.no_grad():
+                    text_features = model.one_peace.extract_text_features(src_tokens)
+                del src_tokens
+                text_vector = model.pca.transform(text_features.cpu().type(torch.FloatTensor).numpy()[0:1])[0]
+                del text_features
+                vectors.append(text_vector)
+                weights.append(config.annoy_input_weight)
+            if trocr_text:
+                src_tokens = model.one_peace.process_text([trocr_text])
+                with torch.no_grad():
+                    text_features = model.one_peace.extract_text_features(src_tokens)
+                del src_tokens
+                text_vector = model.pca.transform(text_features.cpu().type(torch.FloatTensor).numpy()[0:1])[0]
+                del text_features
+                vectors.append(text_vector)
+                weights.append(config.annoy_ocr_weight)
+            src_images = model.one_peace.process_image([image_fname])
+            with torch.no_grad():
+                image_features = model.one_peace.extract_image_features(src_images)
+            del src_images
+            image_vector = model.pca.transform(image_features.cpu().type(torch.FloatTensor).numpy()[0:1])[0]
+            del image_features
+            vectors.append(image_vector)
+            weights.append(config.annoy_image_weight)
+
+            found_indices = model.annoy_index.get_nns_by_vector(np.average(vectors, axis=0, weights=weights), n=config.max_wiki_paragraphs, search_k=config.annoy_search_k)[:config.include_n_texts]
+            del vectors
+            del weights
+            long_text = " ".join((model.texts[idx] for idx in found_indices))
+        else:
+            src_images = model.one_peace.process_image([image_fname])
+            with torch.no_grad():
+                image_features = model.one_peace.extract_image_features(src_images)
+            del src_images
+            image_vector = model.pca.transform(image_features.cpu().type(torch.FloatTensor).numpy()[0:1])[0]
+            del image_features
+            found_indices = model.annoy_index.get_nns_by_vector(image_vector, n=config.max_wiki_paragraphs, search_k=config.annoy_search_k)
+            found_texts = [model.texts[idx] for idx in found_indices]
+            del found_indices
+            long_text = find_long_text_similar_to_short_text(image_caption, found_texts, model)
+            # long_text = model.texts[found_indices[0]]
+            del image_vector, found_indices
+    else:
+        long_text = ''
+
+    result = ". ".join(filter(bool, (image_caption, long_text, trocr_text)))
     
     return ' '.join(result.split())
 
 
-def find_text_by_audio(audio_fname: str, model: MultimodalModel, top_n: int = 100,
-                       search_k: int = -1) -> Tuple[str, bool]:
+def find_text_by_audio(audio_fname: str, model: MultimodalModel) -> Tuple[str, bool]:
     if not os.path.isfile(audio_fname):
         err_msg = f'The image "{audio_fname}" does not exist!'
         conversation_logger.error(err_msg)
@@ -233,20 +300,31 @@ def find_text_by_audio(audio_fname: str, model: MultimodalModel, top_n: int = 10
         audio_caption = audio_caption[0].upper() + audio_caption[1:]
     if is_speech:
         return audio_caption, True
-    src_audios, audio_padding_masks = model.one_peace.process_audio([audio_fname])
-    with torch.no_grad():
-        audio_features = model.one_peace.extract_audio_features(src_audios, audio_padding_masks)
-    del src_audios, audio_padding_masks
-    audio_vector = model.pca.transform(audio_features.cpu().type(torch.FloatTensor).numpy()[0:1])[0]
-    del audio_features
-    found_indices = model.annoy_index.get_nns_by_vector(audio_vector, n=top_n, search_k=search_k)
-    del audio_vector
-    found_texts = [model.texts[idx] for idx in found_indices]
-    del found_indices
-    if len(found_texts) > 1:
-        result = audio_caption + ' ' + find_long_text_similar_to_short_text(audio_caption, found_texts, model)
-    else:
-        result = audio_caption + ' ' + found_texts[0]
+    
+    if config.use_one_peace and startup_config.load_one_peace:
+        src_audios, audio_padding_masks = model.one_peace.process_audio([audio_fname])
+        with torch.no_grad():
+            audio_features = model.one_peace.extract_audio_features(src_audios, audio_padding_masks)
+        del src_audios, audio_padding_masks
+        audio_vector = model.pca.transform(audio_features.cpu().type(torch.FloatTensor).numpy()[0:1])[0]
+        del audio_features
+        found_indices = model.annoy_index.get_nns_by_vector(audio_vector, n=config.max_wiki_paragraphs, search_k=config.annoy_search_k)
+        del audio_vector
+        found_texts = [model.texts[idx] for idx in found_indices]
+        del found_indices
+        if len(found_texts) > 1:
+            if len(found_texts) == 1:
+                long_text = found_texts[0]
+            else:
+                long_text = find_long_text_similar_to_short_text(audio_caption, found_texts, model)
+        else:
+            long_text = ''
+    
+    result = ". ".join(filter(bool, (audio_caption, long_text)))
+    # if len(found_texts) > 1:
+    #     result = audio_caption + ' ' + find_long_text_similar_to_short_text(audio_caption, found_texts, model)
+    # else:
+    #     result = audio_caption + ' ' + found_texts[0]
     return ' '.join(result.split()), False
     
 def process_image(image_fname: str) -> torch.Tensor:
@@ -273,7 +351,7 @@ def load_images(image_file_list: List[str]):
         return None
     return [np.array(Image.open(file).convert("RGB")) for file in image_file_list]
 
-def tokenize_prompt(prompt: str, image_file_list: List[str], tokenizer: AutoTokenizer, add_eos_token: bool = True,
+def tokenize_prompt(prompt: str, tokenizer: AutoTokenizer, add_eos_token: bool = True,
                     add_labels: bool=True) -> Dict[str, Tuple[List[int], List[torch.Tensor]]]:
     result = tokenizer(prompt, padding=False, return_tensors=None)
     if (result['input_ids'][-1] != tokenizer.eos_token_id) and add_eos_token:
@@ -281,64 +359,54 @@ def tokenize_prompt(prompt: str, image_file_list: List[str], tokenizer: AutoToke
         result['attention_mask'].append(1)
     if add_labels:
         result['labels'] = result['input_ids'].copy()
-    result['images'] = [process_image(image_fname) for image_fname in image_file_list if process_image(image_fname) is not None]
     return result
 
-def generate_answer_based_on_prompt(prompt: str, image_file_list: List[str], model: LlavaNextForConditionalGeneration, processor: LlavaNextProcessor) -> str:
-    '''
-    tokenized_text = tokenize_prompt(
-        prompt,
-        image_file_list,
-        tokenizer,
-        add_labels=False
-    )
-    input_ids = [torch.tensor(data=tokenized_text['input_ids'], dtype=torch.long)]
-    attention_mask = [torch.tensor(data=tokenized_text['attention_mask'], dtype=torch.long)]
-    images = tokenized_text['images'] if tokenized_text['images'] else None
-    del tokenized_text
-    '''
-    # TEMP!!! DO NOT USE Image.open. 
+def generate_answer_based_on_prompt(prompt: str, model: LlavaNextForConditionalGeneration, processor: LlavaNextProcessor, image_file_list: List[str] = []) -> str:
+        
+    if startup_config.llm_type == "mistral":
+        tokenized_text = tokenize_prompt(
+            prompt,
+            processor,
+            add_labels=False
+        )
+        input_ids = [torch.tensor(data=tokenized_text['input_ids'], dtype=torch.long)]
+        attention_mask = [torch.tensor(data=tokenized_text['attention_mask'], dtype=torch.long)]
+        del tokenized_text
+        batched_input_ids = torch.nn.utils.rnn.pad_sequence(
+            input_ids,
+            batch_first=True, padding_value=0  # <unk> idx
+        ).to(DEVICE)[:,:-1]
+        batched_attention_mask = torch.nn.utils.rnn.pad_sequence(
+            attention_mask,
+            batch_first=True, padding_value=0
+        ).to(DEVICE)[:,:-1]
+        generated_ids = model.generate(
+            input_ids=batched_input_ids, attention_mask=batched_attention_mask,
+            max_new_tokens=1000, do_sample=True
+        )
+        del batched_input_ids, batched_attention_mask
+        
+        predicted_text = processor.batch_decode(generated_ids, skip_special_tokens=True)[0]
+        input_prompt = processor.batch_decode(input_ids, skip_special_tokens=True)[0]
+        
+        del input_ids, attention_mask, generated_ids
 
-    images = load_images(image_file_list)
-    
-    inputs = processor(text=prompt, images=images, return_tensors="pt").to(DEVICE)
-    '''
-    batched_input_ids = torch.nn.utils.rnn.pad_sequence(
-        input_ids,
-        batch_first=True, padding_value=0  # <unk> idx
-    ).to(DEVICE)[:,:-1]
-    batched_attention_mask = torch.nn.utils.rnn.pad_sequence(
-        attention_mask,
-        batch_first=True, padding_value=0
-    ).to(DEVICE)[:,:-1]
-    '''
-    
-    '''
-    generated_ids = model.generate(
-        input_ids=batched_input_ids, attention_mask=batched_attention_mask, images=images,
-        max_new_tokens=1000, do_sample=True
-    )
-    '''
-    
-    generated_ids = model.generate(**inputs, max_new_tokens=1000, do_sample=True)
+    elif startup_config.llm_type == "llava":
+        images = load_images(image_file_list)
+        
+        inputs = processor(text=prompt, images=images, return_tensors="pt").to(DEVICE)
+        generated_ids = model.generate(**inputs, max_new_tokens=1000, do_sample=True)
 
-    predicted_text = processor.batch_decode(generated_ids, skip_special_tokens=True, clean_up_tokenization_spaces=False)[0]
-    input_prompt = processor.decode(inputs["input_ids"][0], skip_special_tokens=True)
-    
-    #del batched_input_ids, batched_attention_mask
-    
-    #predicted_text = tokenizer.batch_decode(generated_ids, skip_special_tokens=True)[0]
-    #input_prompt = tokenizer.batch_decode(input_ids, skip_special_tokens=True)[0]
-    
-    #del input_ids, attention_mask, generated_ids
-    
+        predicted_text = processor.batch_decode(generated_ids, skip_special_tokens=True, clean_up_tokenization_spaces=False)[0]
+        input_prompt = processor.decode(inputs["input_ids"][0], skip_special_tokens=True)
+        
     if len(predicted_text) < len(input_prompt):
         err_msg = (f'The predicted answer "{predicted_text}" does not correct, '
-                   f'because it does not start with the prompt "{input_prompt}".')
+                f'because it does not start with the prompt "{input_prompt}".')
         raise ValueError(err_msg)
     if not predicted_text.startswith(input_prompt):
         err_msg = (f'The predicted answer "{predicted_text}" does not correct, '
-                   f'because it does not start with the prompt "{input_prompt}".')
+                f'because it does not start with the prompt "{input_prompt}".')
         raise ValueError(err_msg)
 
     return ' '.join(predicted_text[len(input_prompt):].split()).strip()
@@ -522,7 +590,7 @@ def parse_query(cur_query_list: List[Dict[str, str]]) -> Tuple[List[str], List[s
 
 def generate_full_prompt(model: MultimodalModel,
                          cur_query_list: List[Dict[str, str]], history_list: Tuple[str, str],
-                         search_k: int = -1) -> str:
+                        ) -> str:
     text_list, image_file_list, audio_file_list = parse_query(cur_query_list)
     previous_dialogue, last_answer = history_list
     if len(previous_dialogue) == 0:
@@ -540,16 +608,18 @@ def generate_full_prompt(model: MultimodalModel,
                 new_prompt = previous_dialogue[:-7].strip()
             else:
                 new_prompt = previous_dialogue
-    image_descriptions = [find_text_by_image(cur, model, search_k=search_k) for cur in image_file_list]
-    audio_descriptions = [find_text_by_audio(cur, model, search_k=search_k) for cur in audio_file_list]
+    input_text_concated = " ".join(text_list)
+    del text_list
+    image_descriptions = [find_text_by_image(input_text_concated, cur, model) for cur in image_file_list]
+    audio_descriptions = [find_text_by_audio(input_text_concated, cur, model) for cur in audio_file_list]
     del audio_file_list
     if len(image_descriptions) > 0:
         new_prompt += (' ' + generate_prompt_for_image(image_descriptions))
     if len(audio_descriptions) > 0:
         new_prompt += (' ' + generate_prompt_for_audio(audio_descriptions))
-    for cur_text in text_list:
-        new_prompt += (' ' + cur_text)
-    del text_list
+    # for cur_text in text_list:
+    #     new_prompt += (' ' + cur_text)
+    new_prompt = " ".join((new_prompt, input_text_concated))
     new_prompt += ' [/INST]'
     return ' '.join(new_prompt.strip().split())
 
@@ -564,18 +634,17 @@ def setup_model_and_tokenizer() -> Tuple[MultimodalModel, AutoTokenizer]:
     #     err_msg = 'CUDA is not available!'
     #     conversation_logger.error(err_msg)
     #     raise ValueError(err_msg)
-    one_peace_dir = os.path.join(os.path.dirname(__file__), 'ONE-PEACE')
-    if not os.path.isdir(one_peace_dir):
-        err_msg = f'The directory "{one_peace_dir}" does not exist!'
-        conversation_logger.error(err_msg)
-        raise ValueError(err_msg)
-    sys.path.append(one_peace_dir)
-    from one_peace.models import from_pretrained
+    # if not os.path.isdir(one_peace_dir):
+    #     err_msg = f'The directory "{one_peace_dir}" does not exist!'
+    #     conversation_logger.error(err_msg)
+    #     raise ValueError(err_msg)
+    # sys.path.append(one_peace_dir)
+    # from one_peace.models import from_pretrained
 
-    conversation_logger.info('ONE-PEACE is attached.')
+    # conversation_logger.info('ONE-PEACE is attached.')
 
     # model_dir = os.path.join(os.path.dirname(__file__), 'models')
-    model_dir = config.weights_path
+    model_dir = startup_config.weights_path
     if not os.path.isdir(model_dir):
         err_msg = f'The directory "{model_dir}" does not exist!'
         conversation_logger.error(err_msg)
@@ -588,65 +657,72 @@ def setup_model_and_tokenizer() -> Tuple[MultimodalModel, AutoTokenizer]:
         raise ValueError(err_msg)
     current_workdir = os.getcwd()
     conversation_logger.info(f'Current working directory: {current_workdir}')
-    os.chdir(one_peace_dir)
-    conversation_logger.info(f'New working directory: {os.getcwd()}')
-    if DEVICE.type == "cpu":
-        onepeace_model = from_pretrained(one_peace_model_fname, device=DEVICE)
+    if startup_config.load_one_peace:
+        one_peace_dir = os.path.join(os.path.dirname(__file__), 'ONE-PEACE')
+        os.chdir(one_peace_dir)
+        conversation_logger.info(f'New working directory: {os.getcwd()}')
+        if DEVICE.type == "cpu":
+            onepeace_model = from_pretrained(one_peace_model_fname, device=DEVICE)
+        else:
+            onepeace_model = from_pretrained(one_peace_model_fname, device=DEVICE, dtype='fp16')
+        conversation_logger.info(f'ONE-PEACE model is loaded from the "{one_peace_model_fname}".')
+        os.chdir(current_workdir)
+        conversation_logger.info(f'Restored working directory: {os.getcwd()}')
+        conversation_logger.info('The ONE-PEACE model is loaded.')
+
+        pca_fname = os.path.join(model_dir, 'wiki_onepeace_pca.pkl')
+        if not os.path.isfile(pca_fname):
+            err_msg = f'The file "{pca_fname}" does not exist!'
+            conversation_logger.error(err_msg)
+            raise ValueError(err_msg)
+        with open(pca_fname, 'rb') as fp:
+            pca = pickle.load(fp)
+        if not isinstance(pca, Pipeline):
+            err_msg = (f'The PCA pipeline loaded from the "{pca_fname}" has a wrong type! '
+                    f'Expected sklearn.pipeline.Pipeline, got {type(pca)}.')
+            conversation_logger.error(err_msg)
+            raise ValueError(err_msg)
+        feature_vector_size = pca.named_steps.pca.n_components
+        conversation_logger.info(f'The PCA pipeline is loaded. The feature vector size is {feature_vector_size}.')
+
+        texts_fname = os.path.join(model_dir, 'en_wiki_paragraphs.txt')
+        if not os.path.isfile(texts_fname):
+            err_msg = f'The file "{texts_fname}" does not exist!'
+            conversation_logger.error(err_msg)
+            raise ValueError(err_msg)
+        paragraphs = []
+        counter = 0
+        for curline in fileinput.input(texts_fname, openhook=fileinput.hook_encoded("utf-8", "surrogateescape")):
+            prepline = curline.strip()
+            if len(prepline) > 0:
+                paragraphs.append(prepline)
+                counter += 1
+                if counter % 1_000_000 == 0:
+                    conversation_logger.info(f'{counter} paragraphs are loaded from the "{texts_fname}".')
+        gc.collect()
+        info_msg = (f'The text corpus with Wikipedia paragraphs is loaded. '
+                    f'There are {len(paragraphs)} paragraphs in this corpus.')
+        conversation_logger.info(info_msg)
+
+        annoy_fname = os.path.join(model_dir, 'en_wiki_paragraphs.ann')
+        if not os.path.isfile(annoy_fname):
+            err_msg = f'The file "{annoy_fname}" does not exist!'
+            conversation_logger.error(err_msg)
+            raise ValueError(err_msg)
+        annoy_index = AnnoyIndex(feature_vector_size, 'angular')
+        annoy_index.load(annoy_fname)
+        conversation_logger.info('The Annoy index for Wikipedia paragraphs is loaded.')
+        n_annoy_items = annoy_index.get_n_items()
+        if n_annoy_items != len(paragraphs):
+            err_msg = (f'The Wiki text corpus does not correspond to the Wiki text index, '
+                    f'because their sizes are not same! {n_annoy_items} != {len(paragraphs)}.')
+            conversation_logger.error(err_msg)
+            raise ValueError(err_msg)
     else:
-        onepeace_model = from_pretrained(one_peace_model_fname, device=DEVICE, dtype='fp16')
-    conversation_logger.info(f'ONE-PEACE model is loaded from the "{one_peace_model_fname}".')
-    os.chdir(current_workdir)
-    conversation_logger.info(f'Restored working directory: {os.getcwd()}')
-    conversation_logger.info('The ONE-PEACE model is loaded.')
-
-    pca_fname = os.path.join(model_dir, 'wiki_onepeace_pca.pkl')
-    if not os.path.isfile(pca_fname):
-        err_msg = f'The file "{pca_fname}" does not exist!'
-        conversation_logger.error(err_msg)
-        raise ValueError(err_msg)
-    with open(pca_fname, 'rb') as fp:
-        pca = pickle.load(fp)
-    if not isinstance(pca, Pipeline):
-        err_msg = (f'The PCA pipeline loaded from the "{pca_fname}" has a wrong type! '
-                   f'Expected sklearn.pipeline.Pipeline, got {type(pca)}.')
-        conversation_logger.error(err_msg)
-        raise ValueError(err_msg)
-    feature_vector_size = pca.named_steps.pca.n_components
-    conversation_logger.info(f'The PCA pipeline is loaded. The feature vector size is {feature_vector_size}.')
-
-    texts_fname = os.path.join(model_dir, 'en_wiki_paragraphs.txt')
-    if not os.path.isfile(texts_fname):
-        err_msg = f'The file "{texts_fname}" does not exist!'
-        conversation_logger.error(err_msg)
-        raise ValueError(err_msg)
-    paragraphs = []
-    counter = 0
-    for curline in fileinput.input(texts_fname, openhook=fileinput.hook_encoded("utf-8", "surrogateescape")):
-        prepline = curline.strip()
-        if len(prepline) > 0:
-            paragraphs.append(prepline)
-            counter += 1
-            if counter % 1_000_000 == 0:
-                conversation_logger.info(f'{counter} paragraphs are loaded from the "{texts_fname}".')
-    gc.collect()
-    info_msg = (f'The text corpus with Wikipedia paragraphs is loaded. '
-                f'There are {len(paragraphs)} paragraphs in this corpus.')
-    conversation_logger.info(info_msg)
-
-    annoy_fname = os.path.join(model_dir, 'en_wiki_paragraphs.ann')
-    if not os.path.isfile(annoy_fname):
-        err_msg = f'The file "{annoy_fname}" does not exist!'
-        conversation_logger.error(err_msg)
-        raise ValueError(err_msg)
-    annoy_index = AnnoyIndex(feature_vector_size, 'angular')
-    annoy_index.load(annoy_fname)
-    conversation_logger.info('The Annoy index for Wikipedia paragraphs is loaded.')
-    n_annoy_items = annoy_index.get_n_items()
-    if n_annoy_items != len(paragraphs):
-        err_msg = (f'The Wiki text corpus does not correspond to the Wiki text index, '
-                   f'because their sizes are not same! {n_annoy_items} != {len(paragraphs)}.')
-        conversation_logger.error(err_msg)
-        raise ValueError(err_msg)
+        onepeace_model = None
+        pca = None
+        annoy_index = None
+        paragraphs = None
 
     audio_cls_dirname = os.path.join(model_dir, 'auxiliary_models', 'audioset')
     if not os.path.isdir(audio_cls_dirname):
@@ -658,21 +734,27 @@ def setup_model_and_tokenizer() -> Tuple[MultimodalModel, AutoTokenizer]:
         audio_cls = ASTForAudioClassification.from_pretrained(audio_cls_dirname).to(DEVICE)
     else:
         audio_cls = ASTForAudioClassification.from_pretrained(audio_cls_dirname, torch_dtype=torch.float16).to(DEVICE)
-    image_captioning_dirname = os.path.join(model_dir, 'auxiliary_models', 'blip')
-    if not os.path.isdir(image_captioning_dirname):
-        err_msg = f'The directory "{image_captioning_dirname}" does not exist!'
-        conversation_logger.error(err_msg)
-        raise ValueError(err_msg)
-    image_processor = BlipProcessor.from_pretrained(image_captioning_dirname)
-    if DEVICE.type == "cpu":
-        image_caption_generator = BlipForConditionalGeneration.from_pretrained(
-            image_captioning_dirname
-        ).to(DEVICE)
+    
+    if startup_config.load_blit:
+        image_captioning_dirname = os.path.join(model_dir, 'auxiliary_models', 'blip')
+        if not os.path.isdir(image_captioning_dirname):
+            err_msg = f'The directory "{image_captioning_dirname}" does not exist!'
+            conversation_logger.error(err_msg)
+            raise ValueError(err_msg)
+        image_processor = BlipProcessor.from_pretrained(image_captioning_dirname)
+        if DEVICE.type == "cpu":
+            image_caption_generator = BlipForConditionalGeneration.from_pretrained(
+                image_captioning_dirname
+            ).to(DEVICE)
+        else:
+            image_caption_generator = BlipForConditionalGeneration.from_pretrained(
+                image_captioning_dirname,
+                torch_dtype=torch.float16
+            ).to(DEVICE)
     else:
-        image_caption_generator = BlipForConditionalGeneration.from_pretrained(
-            image_captioning_dirname,
-            torch_dtype=torch.float16
-        ).to(DEVICE)
+        image_captioning_dirname = None
+        image_processor = None
+        image_caption_generator = None
 
     # asr_dirname = os.path.join(model_dir, 'auxiliary_models', 'whisper_medium')
     # if not os.path.isdir(asr_dirname):
@@ -681,46 +763,68 @@ def setup_model_and_tokenizer() -> Tuple[MultimodalModel, AutoTokenizer]:
     #     raise ValueError(err_msg)
     asr_pipe = pipeline(
         'automatic-speech-recognition',
-        model=config.weights_whisper,
+        model=startup_config.weights_whisper,
         chunk_length_s=30,
         device=DEVICE
     )
 
-    sbert_dirname = os.path.join(model_dir, 'auxiliary_models', 'sbert')
-    if not os.path.isdir(sbert_dirname):
-        err_msg = f'The directory "{sbert_dirname}" does not exist!'
-        conversation_logger.error(err_msg)
-        raise ValueError(err_msg)
-    sentence_embedder = SentenceTransformer(sbert_dirname, device=DEVICE.type)
-
-    llm_dirname = config.llava_weights
-    if not os.path.isdir(llm_dirname):
-        err_msg = f'The directory "{llm_dirname}" does not exist!'
-        conversation_logger.error(err_msg)
-        raise ValueError(err_msg)
-
-    if DEVICE.type == "cpu":
-        llm_model = LlavaNextForConditionalGeneration.from_pretrained(llm_dirname).to(DEVICE)
+    if startup_config.load_sbert:
+        sbert_dirname = os.path.join(model_dir, 'auxiliary_models', 'sbert')
+        if not os.path.isdir(sbert_dirname):
+            err_msg = f'The directory "{sbert_dirname}" does not exist!'
+            conversation_logger.error(err_msg)
+            raise ValueError(err_msg)
+        sentence_embedder = SentenceTransformer(sbert_dirname, device=DEVICE.type)
     else:
-        llm_model = LlavaNextForConditionalGeneration.from_pretrained(llm_dirname, torch_dtype=torch.float16, device_map={"":0})
+        sentence_embedder = None
 
-    llm_model.eval()
-    llm_processor= LlavaNextProcessor.from_pretrained(llm_dirname)
-    conversation_logger.info('The large language model is loaded.')
+    if startup_config.llm_type == "llava":
+        llm_dirname = startup_config.llava_weights
+        if not os.path.isdir(llm_dirname):
+            err_msg = f'The directory "{llm_dirname}" does not exist!'
+            conversation_logger.error(err_msg)
+            raise ValueError(err_msg)
+
+        if DEVICE.type == "cpu":
+            llm_model = LlavaNextForConditionalGeneration.from_pretrained(llm_dirname).to(DEVICE)
+        else:
+            llm_model = LlavaNextForConditionalGeneration.from_pretrained(llm_dirname, torch_dtype=torch.float16, device_map={"":0})
+
+        llm_model.eval()
+        llm_processor= LlavaNextProcessor.from_pretrained(llm_dirname)
+        conversation_logger.info('The large language model is loaded.')
+    else:
+        if startup_config.llm_type == "mistral":
+            llm_dirname = startup_config.weights_mistral
+        elif startup_config.llm_type == "phi3":
+            llm_dirname = startup_config.weights_phi3
+        elif startup_config.llm_type == "gemma2":
+            llm_dirname = startup_config.weights_gemma2_9b
+        else:
+            raise ValueError('Unknown LLM type.')
+
+        if DEVICE.type == "cpu":
+            llm_model = AutoModelForCausalLM.from_pretrained(llm_dirname).to(DEVICE)
+        else:
+            llm_model = AutoModelForCausalLM.from_pretrained(llm_dirname, torch_dtype=torch.float16, device_map={"":0})
+
+        llm_model.eval()
+        llm_processor = AutoTokenizer.from_pretrained(llm_dirname)
+        conversation_logger.info('The large language model is loaded.')
 
     # Load TrOCR model and processor
-    if not os.path.isdir(model_dir):
-        err_msg = f'The directory "{model_dir}" does not exist!'
-        conversation_logger.error(err_msg)
-        raise ValueError(err_msg)
-    trocr_processor = TrOCRProcessor.from_pretrained(config.weights_ocr)
-    if DEVICE.type == "cpu":
-        trocr_model = VisionEncoderDecoderModel.from_pretrained(config.weights_ocr).to(DEVICE)
+    if startup_config.load_ocr:
+        trocr_processor = TrOCRProcessor.from_pretrained(startup_config.weights_ocr)
+        if DEVICE.type == "cpu":
+            trocr_model = VisionEncoderDecoderModel.from_pretrained(startup_config.weights_ocr).to(DEVICE)
+        else:
+            trocr_model = VisionEncoderDecoderModel.from_pretrained(startup_config.weights_ocr, torch_dtype=torch.float16).to(DEVICE)
+        conversation_logger.info('The Ocr model is loaded.')
     else:
-        trocr_model = VisionEncoderDecoderModel.from_pretrained(config.weights_ocr, torch_dtype=torch.float16).to(DEVICE)
-    conversation_logger.info('The Ocr model is loaded.')
-    translate_ruen = pipeline("translation", model="/userspace/pva/weights/opusruen", device=DEVICE)
-    translate_enru = pipeline("translation", model="/userspace/pva/weights/opusenru", device=DEVICE)
+        trocr_processor = None
+        trocr_model = None
+    translate_ruen = pipeline("translation", model=startup_config.weights_ruen, device=DEVICE)
+    translate_enru = pipeline("translation", model=startup_config.weights_enru, device=DEVICE)
     conversation_logger.info('The Translation models are loaded.')
 
     full_pipeline_for_conversation = MultimodalModel(
@@ -755,7 +859,7 @@ def generate_text(model: MultimodalModel, processor: LlavaNextProcessor,
         history_list = ('', '')
     prompt = generate_full_prompt(model, cur_query_list, history_list)
     conversation_logger.info(f'Current prompt: {prompt}')
-    answer = generate_answer_based_on_prompt(prompt, image_file_list, model.llm, processor)
+    answer = generate_answer_based_on_prompt(prompt, model.llm, processor, image_file_list)
     conversation_logger.info(f'Answer: {answer}')
 
     answer = answer.replace("<image>", "image")
@@ -790,7 +894,7 @@ def get_ppl(model: MultimodalModel, processor: LlavaNextProcessor,
     shift_logits = out_logits[..., : -1, :].contiguous()
     labels = processor.encode(cur_query_tuple[1], add_special_tokens=False, return_tensors="pt")
     context_before_labels = torch.LongTensor([-100] * dialogue_emb.shape[1]).unsqueeze(0)
-    labels = torch.cat([context_before_labels, labels], dim=1).to(llm.device)
+    labels = torch.cat([context_before_labels, labels], dim=1).to(model.llm.device)
     shift_labels = labels[..., 1:].contiguous()
     
     neg_log_likelihood = loss(shift_logits.transpose(1, 2), shift_labels)

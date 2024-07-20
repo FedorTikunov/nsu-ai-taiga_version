@@ -2,10 +2,11 @@ import flask
 import logging
 from flask import request
 import config
+import startup_config
 from pathlib import Path
 
 
-if config.debug:
+if startup_config.debug:
     from debug.testing import setup_model_and_tokenizer, generate_text
 else:
     from team_code.generate import setup_model_and_tokenizer, generate_text
@@ -146,13 +147,25 @@ def clear_context():
     return "Контекст очищен"
 
 @app.route("/set_param", methods=['POST'])
-def set_initial_promt():
+def set_param():
     if "param" in request.form and "value" in request.form:
-        config.__dict__[request.form['param']] = request.form['value']
-        return f"Значение {request.form['param']} установлено в {request.form['value']}"
+        value = request.form['value']
+        try:
+            value = int(value)
+        except:
+            pass
+        config.__dict__[request.form['param']] = value
+        return f"Значение {request.form['param']} установлено в {value}"
     return "Промт не установлен"
+
+@app.route("/get_param", methods=['POST'])
+def get_param():
+    if "param" in request.form and request.form["param"] in config.__dict__:
+        param = config.__dict__[request.form['param']]
+        return f"{type(param)} = '{param}'"
+    return "Неизвестный параметр"
 
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000, debug=config.flask_debug)
+    app.run(host='0.0.0.0', port=5000, debug=startup_config.flask_debug)
     # app.run(host='localhost', port=5000)
