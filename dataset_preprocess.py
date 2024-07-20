@@ -19,7 +19,7 @@ def main(dir_dataset: str, dir_path: str, save_path: str):
 
         new_data = []
 
-    for item in tqdm(data):
+    for item in tqdm.tqdm(data):
         img_full_path: Path = dir_path / item['image']
         if not img_full_path.exists():
             continue
