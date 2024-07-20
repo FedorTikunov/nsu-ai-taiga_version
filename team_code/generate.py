@@ -793,11 +793,15 @@ def setup_model_and_tokenizer() -> Tuple[MultimodalModel, AutoTokenizer]:
         llm_model.eval()
         llm_processor= LlavaNextProcessor.from_pretrained(llm_dirname)
         conversation_logger.info('The large language model is loaded.')
-    elif startup_config.llm_type == "mistral" or startup_config.llm_type == "phi3":
+    else:
         if startup_config.llm_type == "mistral":
             llm_dirname = startup_config.weights_mistral
-        else:
+        elif startup_config.llm_type == "phi3":
             llm_dirname = startup_config.weights_phi3
+        elif startup_config.llm_type == "gemma2":
+            llm_dirname = startup_config.weights_gemma2_9b
+        else:
+            raise ValueError('Unknown LLM type.')
 
         if DEVICE.type == "cpu":
             llm_model = AutoModelForCausalLM.from_pretrained(llm_dirname).to(DEVICE)
