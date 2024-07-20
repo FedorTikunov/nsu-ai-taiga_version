@@ -935,7 +935,7 @@ def setup_model_and_tokenizer() -> Tuple[MultimodalModel, AutoTokenizer]:
         trocr_processor = None
         trocr_model = None
 
-    # Load YOLOv8 model and processor
+    # Load YOLOv8     print(f"Using config: {os.environ['ONLYFANS_CFG']}")model and processor
     if startup_config.load_yolo:
         if DEVICE.type == "cpu":
             yolov8 = YOLO(startup_config.weights_yolo).to(DEVICE)
@@ -969,6 +969,7 @@ def setup_model_and_tokenizer() -> Tuple[MultimodalModel, AutoTokenizer]:
 
 
 # Function that generates the responses for dialodues queries w.r.t. history.
+@torch.no_grad()
 def generate_text(model: MultimodalModel, processor: LlavaNextProcessor,
                   cur_query_list: List[Dict[str, str]], history_list: Tuple[str, str]) -> Tuple[str, Tuple[str, str]]:
 
