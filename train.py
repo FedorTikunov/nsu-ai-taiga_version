@@ -18,8 +18,8 @@ class Llava_finetuning_Dataset(Dataset):
 
     def __getitem__(self, idx):
 
-        for item in self.data:
-            return {'text': item['conversations'][0]['value'], 'image': item['image'], 'answer': item['conversations'][1]['value']}
+        item = self.data[idx]
+        return {'text': item['conversations'][0]['value'], 'image': item['image'], 'answer': item['conversations'][1]['value']}
 
 class Collator:
     def __init__(self, processor):
@@ -34,7 +34,7 @@ class Collator:
         loaded_images= load_images(images)
         
         p_inputs = []
-        for prompt, image in pair(human_texts, image):
+        for prompt, image in zip(human_texts, loaded_images):
             p_inputs.append(self.processor(text=prompt, images=image, return_tensors="pt"))
 
         return {'input': p_inputs, 'label': gpt_texts}

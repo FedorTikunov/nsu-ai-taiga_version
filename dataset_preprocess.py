@@ -16,10 +16,13 @@ def main(dir_dataset: str, dir_path: str, save_path: str):
     with open(dir_dataset, 'r') as f:
         data = json.load(f)
 
-    for item in data:
-        item['image'] = str(dir_path / item['image'])
+        new_data = []
 
     for item in data:
+        img_full_path: Path = dir_path / item['image']
+        if not img_full_path.exists():
+            continue
+        item['image'] = str(dir_path / item['image'])
         cur_query_list = [
             {
                 "type": "image",
@@ -32,10 +35,11 @@ def main(dir_dataset: str, dir_path: str, save_path: str):
             ]
         
         item['conversations'][0]['value'] = generate_full_prompt(model, cur_query_list, ('', ''))
+        new_data.append(item)
 
 
     with open(save_path, 'w') as f:
-        json.dump(data, f, indent=4)
+        json.dump(new_data, f, indent=4)
 
 
 
