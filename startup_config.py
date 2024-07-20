@@ -9,13 +9,6 @@ if "ONLYFANS_CFG" in os.environ:
     for k, v in config.items():
         # setattr(sys.modules[__name__], k, v)
         d[k] = v
-elif len(sys.argv) > 1 and os.path.exists(sys.argv[1]):
-    with open(sys.argv[1]) as f:
-        config = json.load(f)["startup"]
-    d = locals()
-    for k, v in config.items():
-        # setattr(sys.modules[__name__], k, v)
-        d[k] = v
 else:
     weights_path = "/userspace/dra/nsu-ai/team_code/models"
     llava_weights = "/userspace/pva/weights/llava_next"

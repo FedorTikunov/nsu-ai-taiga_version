@@ -10,14 +10,6 @@ if "ONLYFANS_CFG" in os.environ:
     for k, v in config.items():
         # setattr(sys.modules[__name__], k, v)
         d[k] = v
-elif len(sys.argv) > 1 and os.path.exists(sys.argv[1]):
-    print(f"Using arg config: {sys.argv[1]}")
-    with open(sys.argv[1]) as f:
-        config = json.load(f)["runtime"]
-    d = locals()
-    for k, v in config.items():
-        # setattr(sys.modules[__name__], k, v)
-        d[k] = v
 else:
     print("Using default config")
     initial_promt = ('<s>[INST] You are a useful and friendly assistant with great erudition and '

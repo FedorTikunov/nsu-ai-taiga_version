@@ -2,12 +2,13 @@ import json
 import sys
 import os 
 from pathlib import Path
-from generate import generate_full_prompt, setup_model_and_tokenizer
+from team_code.generate import generate_full_prompt, setup_model_and_tokenizer
 
 
-def main(dir_dataset: str, dir_path: str):
+def main(dir_dataset: str, dir_path: str, save_path: str):
     dir_dataset: Path = Path(dir_dataset)
     dir_path: Path = Path(dir_path)
+    save_path: Path = Path(save_path)
 
     model, processor = setup_model_and_tokenizer()
 
@@ -30,10 +31,10 @@ def main(dir_dataset: str, dir_path: str):
             }
             ]
         
-        item['conversations'][0]['value'], _ = generate_full_prompt(model, cur_query_list, ('', ''))
+        item['conversations'][0]['value'] = generate_full_prompt(model, cur_query_list, ('', ''))
 
 
-    with open(dir_dataset, 'w') as f:
+    with open(save_path, 'w') as f:
         json.dump(data, f, indent=4)
 
 
@@ -42,4 +43,5 @@ if __name__ == "__main__":
 
     dir_path = sys.argv[2]
     dir_dataset = sys.argv[1]
-    main(dir_dataset, dir_path)
+    save_path = sys.argv[3]
+    main(dir_dataset, dir_path, save_path)
