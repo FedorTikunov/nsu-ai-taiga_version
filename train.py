@@ -1,4 +1,4 @@
-from generate import generate_full_prompt, generate_answer_based_on_prompt, load_images, MultimodalModel, DEVICE
+from team_code.generate import generate_full_prompt, generate_answer_based_on_prompt, load_images, MultimodalModel, DEVICE
 import json
 from peft import LoraConfig, PeftModel, prepare_model_for_kbit_training, get_peft_model
 from transformers import AutoModelForCausalLM
