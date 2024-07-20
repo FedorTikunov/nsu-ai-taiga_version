@@ -13,7 +13,7 @@ def main(dir_dataset, dir_path):
         data = json.load(f)
 
     for item in data:
-        item['image'] = os.path.join(dir_path + item['image'])
+        item['image'] = os.path.join(dir_path, item['image'])
 
     for item in data:
         cur_query_list = [{'text': item['conversations'][0]['value'], 'image': item['image']}]
