@@ -3,6 +3,7 @@ import sys
 import os 
 from pathlib import Path
 from team_code.generate import generate_full_prompt, setup_model_and_tokenizer
+import tqdm
 
 
 def main(dir_dataset: str, dir_path: str, save_path: str):
@@ -18,7 +19,7 @@ def main(dir_dataset: str, dir_path: str, save_path: str):
 
         new_data = []
 
-    for item in data:
+    for item in tqdm(data):
         img_full_path: Path = dir_path / item['image']
         if not img_full_path.exists():
             continue
