@@ -474,7 +474,15 @@ def tokenize_prompt(prompt: str, tokenizer: AutoTokenizer, add_eos_token: bool =
 
 def generate_answer_based_on_prompt(prompt: str, model: LlavaNextForConditionalGeneration, processor: LlavaNextProcessor, image_file_list: List[str] = []) -> str:
         
-    if startup_config.llm_type == "mistral":
+    if startup_config.llm_type == "llava":
+        images = load_images(image_file_list)
+        
+        inputs = processor(text=prompt, images=images, return_tensors="pt").to(DEVICE)
+        generated_ids = model.generate(**inputs, max_new_tokens=1000, do_sample=True)
+
+        predicted_text = processor.batch_decode(generated_ids, skip_special_tokens=True, clean_up_tokenization_spaces=False)[0]
+        input_prompt = processor.decode(inputs["input_ids"][0], skip_special_tokens=True)
+    else:
         tokenized_text = tokenize_prompt(
             prompt,
             processor,
@@ -502,14 +510,6 @@ def generate_answer_based_on_prompt(prompt: str, model: LlavaNextForConditionalG
         
         del input_ids, attention_mask, generated_ids
 
-    elif startup_config.llm_type == "llava":
-        images = load_images(image_file_list)
-        
-        inputs = processor(text=prompt, images=images, return_tensors="pt").to(DEVICE)
-        generated_ids = model.generate(**inputs, max_new_tokens=1000, do_sample=True)
-
-        predicted_text = processor.batch_decode(generated_ids, skip_special_tokens=True, clean_up_tokenization_spaces=False)[0]
-        input_prompt = processor.decode(inputs["input_ids"][0], skip_special_tokens=True)
         
     if len(predicted_text) < len(input_prompt):
         err_msg = (f'The predicted answer "{predicted_text}" does not correct, '
