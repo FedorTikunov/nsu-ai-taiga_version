@@ -15,6 +15,7 @@
         "weights_ruen": "/userspace/pva/weights/opusruen",
         "weights_enru": "/userspace/pva/weights/opusenru",
         "weights_ocr": "/userspace/pva/weights/ocr",
+        "weights_yolo": "/userspace/pva/weights/yolov8/yolov8m.pt",
         "weights_whisper": "/userspace/pva/weights/whisper-medium",
         "weights_mistral": "/userspace/dra/nsu-ai/team_code/models/llm",
         "weights_phi3": "/userspace/dra/nsu-ai/team_code/models/Phi-3-mini-4k-instruct",
@@ -23,6 +24,7 @@
         "load_blit": true,
         "load_ocr": true,
         "load_sbert": true,
+        "load_yolo": true,
         "llm_type": "llava"
     },
     "runtime": {
@@ -31,6 +33,7 @@
         "use_one_peace": true,
         "use_blit": true,
         "use_ocr": true,
+        "use_yolo": true,
         "max_wiki_paragraphs": 10,
         "annoy_search_k": -1,
         "use_annoy_dist": true,
@@ -39,6 +42,8 @@
         "annoy_image_weight": 0.2,
         "annoy_ocr_weight": 0,
         "annoy_audio_weight": 0.5,
-        "include_n_texts": 2
+        "include_n_texts": 2,
+        "merge_yolo_objects": true,
+        "yolo_objects_weight": 0.1
     }
 }

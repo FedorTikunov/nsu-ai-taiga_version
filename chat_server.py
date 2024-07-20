@@ -4,12 +4,13 @@ from flask import request
 import config
 import startup_config
 from pathlib import Path
+import importlib
 
 
 if startup_config.debug:
-    from debug.testing import setup_model_and_tokenizer, generate_text
+    import debug.testing as generate
 else:
-    from team_code.generate import setup_model_and_tokenizer, generate_text
+    import team_code.generate as generate
 
 logging.basicConfig(level=logging.INFO,
                     format='%(asctime)s - %(levelname)s - %(message)s',
@@ -18,7 +19,7 @@ logging.basicConfig(level=logging.INFO,
 app = flask.Flask(__name__)
 app.secret_key = 'BAD_SECRET_KEY'
 
-model, tokenizer = setup_model_and_tokenizer()
+model, tokenizer = generate.setup_model_and_tokenizer()
 
 global_history = {}
 
@@ -122,7 +123,7 @@ def send():
     #     return "Контекст очищен"
     if cur_query_list:
         try:
-            answer, new_history_list = generate_text(model,
+            answer, new_history_list = generate.generate_text(model,
                                                     tokenizer,
                                                     cur_query_list=cur_query_list,
                                                     history_list=history_list)
@@ -165,6 +166,10 @@ def get_param():
         return f"{type(param)} = '{param}'"
     return "Неизвестный параметр"
 
+@app.route("/reload", methods=['POST'])
+def reload_module():
+    importlib.reload(generate)
+    return "Модуль перезагружен"
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=startup_config.flask_debug)

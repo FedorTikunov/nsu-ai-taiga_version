@@ -31,10 +31,14 @@ from team_code.ONE_PEACE.one_peace.models import from_pretrained
 from team_code.ONE_PEACE.one_peace.models.one_peace.hub_interface import OnePeaceHubInterface
 from dataclasses import dataclass
 import startup_config
-
+from torchvision.transforms import InterpolationMode
+from ultralytics import YOLO
+from PIL.ImageFile import ImageFile
+from ultralytics.engine.results import Results
 DEVICE = torch.device("cuda:0")
 # DEVICE = torch.device("cpu")
 TARGET_SAMPLING_FREQUENCY = 16_000
+
 
 @dataclass
 class MultimodalModel:
@@ -50,6 +54,7 @@ class MultimodalModel:
     llm: LlavaNextForConditionalGeneration
     translate_ruen: pipeline
     translate_enru: pipeline
+    yolo: YOLO
 # MultimodalModel = namedtuple(
 #     'MultimodalModel',
 #     'image audio speech sbert one_peace pca annoy_index texts ocr llm translate_ruen translate_enru'
@@ -221,7 +226,12 @@ def find_text_by_image(input_text: str, image_fname: str, model: MultimodalModel
         trocr_text = f'Image has such text: "{trocr_text}"'
     else:
         trocr_text = ''
-    
+
+    if config.use_yolo and startup_config.load_yolo:
+        crop_image_list = detect_and_crop_objects(image_fname, model)
+    else:
+        crop_image_list = []
+
     if config.use_one_peace and startup_config.load_one_peace:
         if config.use_annoy_dist:
             vectors = []
@@ -236,7 +246,7 @@ def find_text_by_image(input_text: str, image_fname: str, model: MultimodalModel
                 vectors.append(text_vector)
                 weights.append(config.annoy_caption_weight)
             if input_text:
-                src_tokens = model.one_peace.process_text([image_caption])
+                src_tokens = model.one_peace.process_text([input_text])
                 with torch.no_grad():
                     text_features = model.one_peace.extract_text_features(src_tokens)
                 del src_tokens
@@ -262,10 +272,33 @@ def find_text_by_image(input_text: str, image_fname: str, model: MultimodalModel
             vectors.append(image_vector)
             weights.append(config.annoy_image_weight)
 
+            if config.use_yolo and startup_config.load_yolo and config.merge_yolo_objects:
+                for crop_image in crop_image_list:
+                    src_image = process_yolo_image_for_one_peace([crop_image], device=model.one_peace.device, dtype=model.one_peace.dtype)
+                    with torch.no_grad():
+                        image_features = model.one_peace.extract_image_features(src_image)
+                        image_vector = model.pca.transform(image_features.cpu().type(torch.FloatTensor).numpy()[0:1])[0]
+                        del image_features
+                        vectors.append(image_vector)
+                        weights.append(config.yolo_objects_weight)
+
             found_indices = model.annoy_index.get_nns_by_vector(np.average(vectors, axis=0, weights=weights), n=config.max_wiki_paragraphs, search_k=config.annoy_search_k)[:config.include_n_texts]
             del vectors
             del weights
             long_text = " ".join((model.texts[idx] for idx in found_indices))
+
+            if config.use_yolo and startup_config.load_yolo and not config.merge_yolo_objects:
+                yolo_texts = []
+                for crop_image in crop_image_list:
+                    src_image = process_yolo_image_for_one_peace([crop_image], device=model.one_peace.device, dtype=model.one_peace.dtype)
+                    with torch.no_grad():
+                        image_features = model.one_peace.extract_image_features(src_image)
+                        image_vector = model.pca.transform(image_features.cpu().type(torch.FloatTensor).numpy()[0:1])[0]
+                        del image_features
+                        found_indices = model.annoy_index.get_nns_by_vector(image_vector, n=config.max_wiki_paragraphs, search_k=config.annoy_search_k)
+                        yolo_texts.append(model.texts[found_indices[0]])
+                        del found_indices
+                long_text = long_text + " Image has objects with description: " + " ".join(yolo_texts)
         else:
             src_images = model.one_peace.process_image([image_fname])
             with torch.no_grad():
@@ -277,6 +310,17 @@ def find_text_by_image(input_text: str, image_fname: str, model: MultimodalModel
             found_texts = [model.texts[idx] for idx in found_indices]
             del found_indices
             long_text = find_long_text_similar_to_short_text(image_caption, found_texts, model)
+            if config.use_yolo and startup_config.load_yolo:
+                for crop_image in crop_image_list:
+                    src_image = process_yolo_image_for_one_peace([crop_image], device=model.one_peace.device, dtype=model.one_peace.dtype)
+                    with torch.no_grad():
+                        image_features = model.one_peace.extract_image_features(src_image)
+                        image_vector = model.pca.transform(image_features.cpu().type(torch.FloatTensor).numpy()[0:1])[0]
+                        del image_features
+                        found_indices = model.annoy_index.get_nns_by_vector(image_vector, n=config.max_wiki_paragraphs, search_k=config.annoy_search_k)
+                        found_texts = [model.texts[idx] for idx in found_indices]
+                        del found_indices
+                        long_text = long_text.strip() + " Aditional text: " + find_long_text_similar_to_short_text(image_caption, found_texts, model)
             # long_text = model.texts[found_indices[0]]
             del image_vector, found_indices
     else:
@@ -284,7 +328,7 @@ def find_text_by_image(input_text: str, image_fname: str, model: MultimodalModel
 
     result = ". ".join(filter(bool, (image_caption, long_text, trocr_text)))
     
-    return ' '.join(result.split())
+    return result
 
 
 def find_text_by_audio(audio_fname: str, model: MultimodalModel) -> Tuple[str, bool]:
@@ -343,6 +387,73 @@ def process_image(image_fname: str) -> torch.Tensor:
         image_tensor = transform(img)
         
     return image_tensor
+
+def detect_and_crop_objects(image_fname: str, model: MultimodalModel):
+    cropped_images = []
+
+    # Load image
+    image = Image.open(image_fname)
+
+    # Preprocess image for YOLOv8
+    # inputs = model.yolo.processor(images=image, return_tensors="pt", size=416)
+    # inputs = {k: v.to(model.yolo.device) for k, v in inputs.items()}
+
+    # # Run object detection
+    # with torch.no_grad():
+    #         outputs = model.yolo(**inputs)
+
+    # # Postprocess detections
+    # detections =  model.yolo.processor.postprocess(outputs, inputs["image_sizes"])
+    prediction: Results = model.yolo(image)[0]
+    for box in prediction.boxes:
+        # Get bounding box coordinates
+        x_min, y_min, x_max, y_max = box.xyxy[0].tolist()
+
+        # Crop object from image and append to list
+        cropped_image = image.crop((x_min, y_min, x_max, y_max))
+        cropped_images.append(cropped_image)
+
+    return cropped_images
+
+def process_yolo_image_for_one_peace(image_list: List[ImageFile], device="cuda:0", return_image_sizes=False, dtype="fp16") -> List[torch.Tensor]:
+    def cast_data_dtype(dtype, t):
+        if dtype == "bf16":
+            return t.to(dtype=torch.bfloat16)
+        elif dtype == "fp16":
+            return t.to(dtype=torch.half)
+        else:
+            return t
+
+    CLIP_DEFAULT_MEAN = (0.48145466, 0.4578275, 0.40821073)
+    CLIP_DEFAULT_STD = (0.26862954, 0.26130258, 0.27577711)
+    mean = CLIP_DEFAULT_MEAN
+    std = CLIP_DEFAULT_STD
+    transform = transforms.Compose([
+        transforms.Resize(
+            (256, 256),
+            interpolation=InterpolationMode.BICUBIC
+        ),
+        transforms.ToTensor(),
+        transforms.Normalize(mean=mean, std=std)
+    ])
+    patch_images_list = []
+    image_width_list = []
+    image_height_list = []
+    for f_image in image_list:
+        image = f_image.convert("RGB")
+        w, h = image.size
+        patch_image = transform(image)
+        patch_images_list.append(patch_image)
+        image_width_list.append(w)
+        image_height_list.append(h)
+    src_images = torch.stack(patch_images_list, dim=0).to(device)
+    src_images = cast_data_dtype(dtype, src_images)
+    if return_image_sizes:
+        image_widths = torch.tensor(image_width_list).to(device)
+        image_heights = torch.tensor(image_height_list).to(device)
+        return src_images, image_widths, image_heights
+    else:
+        return src_images
 
 
 def load_images(image_file_list: List[str]):
@@ -823,6 +934,17 @@ def setup_model_and_tokenizer() -> Tuple[MultimodalModel, AutoTokenizer]:
     else:
         trocr_processor = None
         trocr_model = None
+
+    # Load YOLOv8 model and processor
+    if startup_config.load_yolo:
+        if DEVICE.type == "cpu":
+            yolov8 = YOLO(startup_config.weights_yolo).to(DEVICE)
+        else:
+            yolov8 = YOLO(startup_config.weights_yolo).to(DEVICE)
+        conversation_logger.info('The YOLOv8 model is loaded.')
+    else:
+        yolov8 = None
+
     translate_ruen = pipeline("translation", model=startup_config.weights_ruen, device=DEVICE)
     translate_enru = pipeline("translation", model=startup_config.weights_enru, device=DEVICE)
     conversation_logger.info('The Translation models are loaded.')
@@ -840,6 +962,7 @@ def setup_model_and_tokenizer() -> Tuple[MultimodalModel, AutoTokenizer]:
         llm=llm_model,
         translate_ruen=translate_ruen,
         translate_enru=translate_enru,
+        yolo=yolov8,
     )
     gc.collect()
     return full_pipeline_for_conversation, llm_processor
