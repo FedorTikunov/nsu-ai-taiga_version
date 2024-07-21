@@ -1,7 +1,7 @@
 from aiogram import Bot, Dispatcher
 from aiogram.types import BotCommand, Message
 from aiogram.filters import Command
-import config
+import config.runtime_config as runtime_config
 import asyncio
 import requests
 import os

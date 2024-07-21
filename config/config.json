@@ -8,6 +8,7 @@
         ]
     },
     "startup": {
+        "DEVICE": "cuda:0",
         "weights_path": "/userspace/dra/nsu-ai/team_code/models",
         "llava_weights": "/userspace/pva/weights/llava_next",
         "debug": false,
@@ -34,6 +35,7 @@
         "use_blit": true,
         "use_ocr": true,
         "use_yolo": true,
+        "use_translation": true,
         "max_wiki_paragraphs": 10,
         "annoy_search_k": -1,
         "use_annoy_dist": true,

@@ -7,7 +7,7 @@ from telebot import types
 import math
 import os
 import uuid
-import config
+import config.runtime_config as runtime_config
 
 
 def make_dir(dir_name):
@@ -23,7 +23,7 @@ make_dir('photo')
 
 
 model, tokenizer = setup_model_and_tokenizer()
-bot = telebot.TeleBot(config.token)
+bot = telebot.TeleBot(runtime_config.token)
 
 history_list = ("", "")
 

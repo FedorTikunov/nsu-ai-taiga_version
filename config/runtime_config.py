@@ -20,6 +20,7 @@ else:
     use_blit = True
     use_ocr = True
     use_yolo = True
+    use_translation = True
     max_wiki_paragraphs = 10
     annoy_search_k = -1
     use_annoy_dist = True

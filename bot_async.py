@@ -6,7 +6,7 @@ from aiogram.types import BotCommand, Message
 from aiogram.utils import executor
 import ffmpeg  # Assuming ffmpeg-python is installed
 from team_code.generate import setup_model_and_tokenizer, generate_text
-import config
+import config.runtime_config as runtime_config
 import logging
 from aiolimiter import AsyncLimiter
 
@@ -21,7 +21,7 @@ model, tokenizer = setup_model_and_tokenizer()
 # model, tokenizer = None, None
 
 # Bot initialization
-bot = Bot(token=config.token)
+bot = Bot(token=runtime_config.token)
 dp = Dispatcher(bot)
 
 global_history = {}

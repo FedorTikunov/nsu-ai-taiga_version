@@ -10,6 +10,7 @@ if "ONLYFANS_CFG" in os.environ:
         # setattr(sys.modules[__name__], k, v)
         d[k] = v
 else:
+    DEVICE = "cuda:0"
     weights_path = "/userspace/dra/nsu-ai/team_code/models"
     llava_weights = "/userspace/pva/weights/llava_next"
     debug = False

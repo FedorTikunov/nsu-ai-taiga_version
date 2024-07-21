@@ -1,8 +1,8 @@
 import flask
 import logging
 from flask import request
-import config
-import startup_config
+import config.runtime_config as runtime_config
+import config.startup_config as startup_config
 from pathlib import Path
 import importlib
 
@@ -155,14 +155,14 @@ def set_param():
             value = int(value)
         except:
             pass
-        config.__dict__[request.form['param']] = value
+        runtime_config.__dict__[request.form['param']] = value
         return f"Значение {request.form['param']} установлено в {value}"
     return "Промт не установлен"
 
 @app.route("/get_param", methods=['POST'])
 def get_param():
-    if "param" in request.form and request.form["param"] in config.__dict__:
-        param = config.__dict__[request.form['param']]
+    if "param" in request.form and request.form["param"] in runtime_config.__dict__:
+        param = runtime_config.__dict__[request.form['param']]
         return f"{type(param)} = '{param}'"
     return "Неизвестный параметр"
 
