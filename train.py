@@ -29,8 +29,8 @@ class Collator:
     def __call__(self, samples):
 
         images = [item['image'] for item in samples]
-        human_texts = [item['human_text'] for item in samples]
-        gpt_texts = [item['gpt_text'] for item in samples]
+        human_texts = [item['text'] for item in samples]
+        gpt_texts = [item['answer'] for item in samples]
 
         loaded_images= load_images(images)
         
