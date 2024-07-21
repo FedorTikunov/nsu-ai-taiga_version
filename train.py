@@ -1,11 +1,10 @@
-from team_code.generate import setup_model_and_tokenizer, generate_full_prompt, generate_answer_based_on_prompt, load_images, MultimodalModel, DEVICE
+from team_code.generate import setup_model_and_tokenizer, load_images, MultimodalModel, DEVICE
 import json
-from peft import LoraConfig, PeftModel, prepare_model_for_kbit_training, get_peft_model
-from transformers import AutoModelForCausalLM
-from transformers import LlavaNextForConditionalGeneration, LlavaNextProcessor
-from torch.utils.data import Dataset, DataLoader
+from peft import LoraConfig, get_peft_model
+from transformers import LlavaNextProcessor
+from torch.utils.data import Dataset
 import torch
-from transformers import AutoModelForCausalLM, AutoTokenizer, Trainer, TrainingArguments
+from transformers import Trainer, TrainingArguments
 import sys
 
 class Llava_finetuning_Dataset(Dataset):
