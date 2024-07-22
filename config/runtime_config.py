@@ -23,6 +23,7 @@ else:
     yolo_prefix = "I think image has objects: "
     yolo_captions_prefix = ""
     wiki_yolo_texts_prefix = "with description: "
+    audio_text_prefix = "There is audio with this text: "
 
     answer_postfix = "[/INST]"
     promt_postfix = ""

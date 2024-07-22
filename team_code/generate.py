@@ -152,6 +152,12 @@ def generate_full_prompt(model: MultimodalModel,
     audio_descriptions = [find_text_by_audio(concated_input, cur, model) for cur in audio_list]
 
     texts = [runtime_config.initial_promt]
+
+    for audio_description in audio_descriptions:
+        if audio_description is not None:
+            texts.append(runtime_config.audio_text_prefix)
+            texts.append(audio_description)
+
     for image_caption, ocr_text, wiki_text, yolo_current_captions, yolo_wiki_texts in zip(image_captions, ocr_texts, wiki_texts, yolo_captions, yolo_wiki_texts):
         texts.append(runtime_config.image_text)
         if image_caption is not None:
@@ -171,9 +177,8 @@ def generate_full_prompt(model: MultimodalModel,
                 texts.append(runtime_config.wiki_yolo_texts_prefix)
                 texts.append(yolo_wiki_text)
     texts.append(runtime_config.answer_postfix)
-    texts.append(runtime_config.dialogue_prefix)
 
-    return ""
+    return "; ".join(texts)
 
 # Function that generates the responses for dialodues queries w.r.t. history.
 @torch.no_grad()
