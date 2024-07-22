@@ -294,7 +294,7 @@ def parse_args():
     parser.add_argument("--sampled-root", type=Path, default=Path('./updated_datasets'))
     parser.add_argument("--answer-path", type=Path, default=Path("./tiny_answers"))
     parser.add_argument("--max", type=int, default=None)
-    parser.add_argument("--step", type=int, default=1)
+    parser.add_argument("--step", type=int, default=None)
 
     args = parser.parse_args()
     return args
@@ -305,16 +305,22 @@ class GeneralDataset(Dataset):
         self,
         dataset_name: str,
         root: Path = Path('./tiny_lvlm_datasets'),
-        step: int = 1,
+        step: int = None,
         max: Optional[int] = None,
     ):
         self.root = root
         self.dataset_name = dataset_name
-        with open(root / dataset_name / "dataset.json", 'r') as f:
+        with open(root / dataset_name / "dataset.json", 'rb') as f:
+            dataset = json.load(f)
+            if step is None:
+                if max is None:
+                    step = 1
+                else:
+                    step = len(dataset) // max
             if max is not None:
-                self.dataset = json.load(f)[:max:step]
+                self.dataset = dataset[:max:step]
             else:
-                self.dataset = json.load(f)[::step]
+                self.dataset = dataset[::step]
 
     def __len__(self):
         return len(self.dataset)

@@ -308,7 +308,6 @@ def find_text_by_image(input_text: str, image_fname: str, model: MultimodalModel
             del image_features
             found_indices = model.annoy_index.get_nns_by_vector(image_vector, n=config.max_wiki_paragraphs, search_k=config.annoy_search_k)
             found_texts = [model.texts[idx] for idx in found_indices]
-            del found_indices
             long_text = find_long_text_similar_to_short_text(image_caption, found_texts, model)
             if config.use_yolo and startup_config.load_yolo:
                 for crop_image in crop_image_list:
@@ -319,7 +318,6 @@ def find_text_by_image(input_text: str, image_fname: str, model: MultimodalModel
                         del image_features
                         found_indices = model.annoy_index.get_nns_by_vector(image_vector, n=config.max_wiki_paragraphs, search_k=config.annoy_search_k)
                         found_texts = [model.texts[idx] for idx in found_indices]
-                        del found_indices
                         long_text = long_text.strip() + " Aditional text: " + find_long_text_similar_to_short_text(image_caption, found_texts, model)
             # long_text = model.texts[found_indices[0]]
             del image_vector, found_indices
