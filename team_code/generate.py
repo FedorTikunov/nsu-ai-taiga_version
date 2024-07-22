@@ -161,9 +161,13 @@ def generate_full_prompt(model: MultimodalModel,
     #             new_prompt = previous_dialogue
     # input_text_concated = " ".join(text_list)
     # del text_list
-    image_headers = [generate_image_caption(cur, model) for cur in image_list]
+    image_captions = [generate_image_caption(cur, model) for cur in image_list]
 
-    yolo_images = detect_and_crop_objects(image_list, model)
+    yolo_images, yolo_captions, yolo_probs = detect_and_crop_objects(image_list, model)
+    if runtime_config.yolo_use_blip_caption:
+        yolo_captions = [[generate_image_caption(crop, model) for crop in cropped_image_list] for cropped_image_list in yolo_images]
+
+    ocr_texts = None
 
 
     image_descriptions = [find_text_by_image(input_text_concated, cur, model) for cur in image_file_list]

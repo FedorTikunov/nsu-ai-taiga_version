@@ -1,7 +1,7 @@
 import logging
 import os
 from config.startup_config import DEVICE
-from typing import List
+from typing import List, Tuple
 from PIL import Image
 from team_code.model import MultimodalModel
 from PIL.ImageFile import ImageFile
@@ -61,13 +61,17 @@ def process_image(image_fname: str) -> torch.Tensor:
     return image_tensor
 
 
-def detect_and_crop_objects(images: List[ImageFile], model: MultimodalModel) -> List[List[Image.Image]]:
-    cropped_acc: List[Image.Image] = []
+def detect_and_crop_objects(images: List[ImageFile], model: MultimodalModel) -> Tuple[List[List[Image.Image]], List[List[str]], List[List[float]]]:
+    cropped_acc: List[List[Image.Image]] = []
+    classes_acc: List[List[Image.Image]] = []
+    probs_acc: List[List[Image.Image]] = []
 
     # Load image
     # image = Image.open(image_fname)
     for image in images:
         cropped_images: List[Image.Image] = []
+        classes: List[Image.Image] = []
+        probs: List[Image.Image] = []
 
         prediction: Results = model.yolo(image)[0]
         for box in prediction.boxes:
@@ -77,10 +81,14 @@ def detect_and_crop_objects(images: List[ImageFile], model: MultimodalModel) -> 
             # Crop object from image and append to list
             cropped_image = image.crop((x_min, y_min, x_max, y_max))
             cropped_images.append(cropped_image)
+            classes.append(prediction.names[int(box.cls)])
+            probs.append(float(box.conf))
         
         cropped_acc.append(cropped_images)
+        classes_acc.append(classes)
+        probs_acc.append(probs)
 
-    return cropped_acc
+    return cropped_acc, classes_acc, probs_acc
 
 
 def process_yolo_image_for_one_peace(image_list: List[ImageFile], device="cuda:0", return_image_sizes=False, dtype="fp16") -> List[torch.Tensor]:

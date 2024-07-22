@@ -32,3 +32,5 @@ else:
     include_n_texts = 2
     merge_yolo_objects = True
     yolo_objects_weight = 0.1
+
+    yolo_use_blip_caption = True
