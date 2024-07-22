@@ -1,7 +1,7 @@
 import logging
 import os
 from config.startup_config import DEVICE
-from typing import List, Tuple
+from typing import List, Tuple, Optional
 from PIL import Image
 from team_code.model import MultimodalModel
 from PIL.ImageFile import ImageFile
@@ -138,122 +138,63 @@ def load_images(image_file_list: List[str]) -> List[ImageFile]:
         return None
     return [Image.open(file).convert("RGB") for file in image_file_list]
 
+def yolo_get_wiki_text(caption: str, image: Image.Image, model: MultimodalModel) -> str:
+    text_tokens, image_tokens = model.one_peace.process_image_text_pairs((caption, image))
+    with torch.no_grad():
+        text_features = model.one_peace.extract_text_features(text_tokens)
+        image_features = model.one_peace.extract_image_features(image_tokens)
+    text_vector = model.pca.transform(text_features.cpu().type(torch.FloatTensor).numpy()[0:1])[0]
+    image_vector = model.pca.transform(image_features.cpu().type(torch.FloatTensor).numpy()[0:1])[0]
+    avg_weights = (runtime_config.yolo_one_peace_caption_weight, runtime_config.yolo_one_peace_image_weight)
+    vectors = (text_vector, image_vector)
+    found_indices = model.annoy_index.get_nns_by_vector(np.average(vectors, axis=0, weights=avg_weights), n=runtime_config.yolo_annoy_include_n_texts, search_k=runtime_config.yolo_annoy_search_k)
+    return " ".join(text_tokens[i] for i in found_indices)
+    
 
-def find_text_by_image(input_text: str, image_fname: str, model: MultimodalModel) -> str:
-    if not os.path.isfile(image_fname):
-        err_msg = f'The image "{image_fname}" does not exist!'
-        image_process_logger.error(err_msg)
-        raise ValueError(err_msg)
-    if runtime_config.use_blit and startup_config.load_blit:
-        image_caption = generate_image_caption(image_fname, model)
-    else:
-        image_caption = ''
+def one_peace_get_image_vector(model: MultimodalModel, image: ImageFile) -> np.ndarray:
+    image_tokens = model.one_peace.process_image([image])
+    with torch.no_grad():
+        image_features = model.one_peace.extract_image_features(image_tokens)
+    image_vector = model.pca.transform(image_features.cpu().type(torch.FloatTensor).numpy()[0:1])[0]
+    return image_vector
 
-    if runtime_config.use_ocr and startup_config.load_ocr:
-        trocr_text = extract_text_with_trocr(image_fname, model)
-        trocr_text = f'Image has such text: "{trocr_text}"'
-    else:
-        trocr_text = ''
 
-    if runtime_config.use_yolo and startup_config.load_yolo:
-        crop_image_list = detect_and_crop_objects(image_fname, model)
-    else:
-        crop_image_list = []
+def one_peace_get_text_vector(model: MultimodalModel, text: str) -> np.ndarray:
+    text_tokens = model.one_peace.process_text([text])
+    with torch.no_grad():
+        text_features = model.one_peace.extract_text_features(text_tokens)
+    text_vector = model.pca.transform(text_features.cpu().type(torch.FloatTensor).numpy()[0:1])[0]
+    return text_vector
 
-    if runtime_config.use_one_peace and startup_config.load_one_peace:
-        if runtime_config.use_annoy_dist:
-            vectors = []
-            weights = []
-            if image_caption:
-                src_tokens = model.one_peace.process_text([image_caption])
-                with torch.no_grad():
-                    text_features = model.one_peace.extract_text_features(src_tokens)
-                del src_tokens
-                text_vector = model.pca.transform(text_features.cpu().type(torch.FloatTensor).numpy()[0:1])[0]
-                del text_features
-                vectors.append(text_vector)
-                weights.append(runtime_config.annoy_caption_weight)
-            if input_text:
-                src_tokens = model.one_peace.process_text([input_text])
-                with torch.no_grad():
-                    text_features = model.one_peace.extract_text_features(src_tokens)
-                del src_tokens
-                text_vector = model.pca.transform(text_features.cpu().type(torch.FloatTensor).numpy()[0:1])[0]
-                del text_features
-                vectors.append(text_vector)
-                weights.append(runtime_config.annoy_input_weight)
-            if trocr_text:
-                src_tokens = model.one_peace.process_text([trocr_text])
-                with torch.no_grad():
-                    text_features = model.one_peace.extract_text_features(src_tokens)
-                del src_tokens
-                text_vector = model.pca.transform(text_features.cpu().type(torch.FloatTensor).numpy()[0:1])[0]
-                del text_features
-                vectors.append(text_vector)
-                weights.append(runtime_config.annoy_ocr_weight)
-            src_images = model.one_peace.process_image([image_fname])
-            with torch.no_grad():
-                image_features = model.one_peace.extract_image_features(src_images)
-            del src_images
-            image_vector = model.pca.transform(image_features.cpu().type(torch.FloatTensor).numpy()[0:1])[0]
-            del image_features
-            vectors.append(image_vector)
-            weights.append(runtime_config.annoy_image_weight)
 
-            if runtime_config.use_yolo and startup_config.load_yolo and runtime_config.merge_yolo_objects:
-                for crop_image in crop_image_list:
-                    src_image = process_yolo_image_for_one_peace([crop_image], device=model.one_peace.device, dtype=model.one_peace.dtype)
-                    with torch.no_grad():
-                        image_features = model.one_peace.extract_image_features(src_image)
-                        image_vector = model.pca.transform(image_features.cpu().type(torch.FloatTensor).numpy()[0:1])[0]
-                        del image_features
-                        vectors.append(image_vector)
-                        weights.append(runtime_config.yolo_objects_weight)
+def get_wiki_texts(model: MultimodalModel, input_text: str, image: ImageFile, image_caption: Optional[str], image_ocr: Optional[str], yolo_captions: Optional[List[str]], yolo_images: Optional[List[Image.Image]]) -> str:
 
-            found_indices = model.annoy_index.get_nns_by_vector(np.average(vectors, axis=0, weights=weights), n=runtime_config.max_wiki_paragraphs, search_k=runtime_config.annoy_search_k)[:runtime_config.include_n_texts]
-            del vectors
-            del weights
-            long_text = " ".join((model.texts[idx] for idx in found_indices))
+    vectors = []
+    weights = []
 
-            if runtime_config.use_yolo and startup_config.load_yolo and not runtime_config.merge_yolo_objects:
-                yolo_texts = []
-                for crop_image in crop_image_list:
-                    src_image = process_yolo_image_for_one_peace([crop_image], device=model.one_peace.device, dtype=model.one_peace.dtype)
-                    with torch.no_grad():
-                        image_features = model.one_peace.extract_image_features(src_image)
-                        image_vector = model.pca.transform(image_features.cpu().type(torch.FloatTensor).numpy()[0:1])[0]
-                        del image_features
-                        found_indices = model.annoy_index.get_nns_by_vector(image_vector, n=runtime_config.max_wiki_paragraphs, search_k=runtime_config.annoy_search_k)
-                        yolo_texts.append(model.texts[found_indices[0]])
-                        del found_indices
-                long_text = long_text + " Image has objects with description: " + " ".join(yolo_texts)
-        else:
-            src_images = model.one_peace.process_image([image_fname])
-            with torch.no_grad():
-                image_features = model.one_peace.extract_image_features(src_images)
-            del src_images
-            image_vector = model.pca.transform(image_features.cpu().type(torch.FloatTensor).numpy()[0:1])[0]
-            del image_features
-            found_indices = model.annoy_index.get_nns_by_vector(image_vector, n=runtime_config.max_wiki_paragraphs, search_k=runtime_config.annoy_search_k)
-            found_texts = [model.texts[idx] for idx in found_indices]
-            del found_indices
-            long_text = find_long_text_similar_to_short_text(image_caption, found_texts, model)
-            if runtime_config.use_yolo and startup_config.load_yolo:
-                for crop_image in crop_image_list:
-                    src_image = process_yolo_image_for_one_peace([crop_image], device=model.one_peace.device, dtype=model.one_peace.dtype)
-                    with torch.no_grad():
-                        image_features = model.one_peace.extract_image_features(src_image)
-                        image_vector = model.pca.transform(image_features.cpu().type(torch.FloatTensor).numpy()[0:1])[0]
-                        del image_features
-                        found_indices = model.annoy_index.get_nns_by_vector(image_vector, n=runtime_config.max_wiki_paragraphs, search_k=runtime_config.annoy_search_k)
-                        found_texts = [model.texts[idx] for idx in found_indices]
-                        del found_indices
-                        long_text = long_text.strip() + " Aditional text: " + find_long_text_similar_to_short_text(image_caption, found_texts, model)
-            # long_text = model.texts[found_indices[0]]
-            del image_vector, found_indices
-    else:
-        long_text = ''
+    if input_text:
+        vectors.append(one_peace_get_text_vector(model, input_text))
+        weights.append(runtime_config.annoy_input_weight)
 
-    result = ". ".join(filter(bool, (image_caption, long_text, trocr_text)))
+    if image_caption:
+        vectors.append(one_peace_get_text_vector(model, image_caption))
+        weights.append(runtime_config.annoy_caption_weight)
+
+    if image_ocr:
+        vectors.append(one_peace_get_text_vector(model, image_ocr))
+        weights.append(runtime_config.annoy_ocr_weight)
+
+    if yolo_captions:
+        for caption in yolo_captions:
+            vectors.append(one_peace_get_text_vector(model, caption))
+            weights.append(runtime_config.annoy_yolo_caption_weight)
+
+    if yolo_images:
+        for image in yolo_images:
+            vectors.append(one_peace_get_image_vector(model, image))
+            weights.append(runtime_config.annoy_yolo_image_weight)
+
+    found_indices = model.annoy_index.get_nns_by_vector(np.average(vectors, axis=0, weights=weights), n=runtime_config.annoy_include_n_texts, search_k=runtime_config.annoy_search_k)
+    result = " ".join(model.texts[i] for i in found_indices)
     
     return result

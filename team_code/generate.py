@@ -5,8 +5,9 @@ from transformers import LlavaNextForConditionalGeneration, LlavaNextProcessor
 import torch
 import torch.nn as nn
 from config import runtime_config, startup_config
-from team_code.image import load_images, generate_image_caption, extract_text_with_trocr, detect_and_crop_objects
+from team_code.image import load_images, generate_image_caption, extract_text_with_trocr, detect_and_crop_objects, yolo_get_wiki_text, get_wiki_texts
 from team_code.text import tokenize_prompt
+from team_code.audio import find_text_by_audio
 from team_code.model import MultimodalModel
 from pathlib import Path
 from PIL.ImageFile import ImageFile
@@ -65,30 +66,6 @@ def generate_answer_based_on_prompt(prompt: str, model: LlavaNextForConditionalG
     return ' '.join(predicted_text[len(input_prompt):].split()).strip()
 
 
-def generate_prompt_for_image(image_description: List[str]) -> str:
-    if len(image_description) < 1:
-        return ''
-    if len(image_description) == 1:
-        prompt = (f'I have just looked at an <image> that probably corresponds to '
-                  f'the following text description. {image_description[0]}')
-        if prompt[-1] not in PUNCTUATION:
-            prompt += '.'
-        elif prompt[-1] not in {'.', '?', '!'}:
-            prompt = prompt[:-1] + '.'
-    else:
-        prompt = f'I have just looked at {cardinal_to_str(len(image_description))} images.'
-        counter = 1
-        for it in image_description:
-            prompt += (f' The {ordinal_to_str(counter)} <image> probably corresponds to '
-                       f'the following text description. {it}')
-            if prompt[-1] not in PUNCTUATION:
-                prompt += '.'
-            elif prompt[-1] not in {'.', '?', '!'}:
-                prompt = prompt[:-1] + '.'
-            counter += 1
-    return prompt + ' Please imagine that you have just seen the same.'
-
-
 def parse_query(cur_query_list: List[Dict[str, str]]) -> Tuple[List[str], List[str], List[str]]:
     possible_content = {'text', 'image', 'audio'}
     text_list = []
@@ -144,44 +121,59 @@ def generate_full_prompt(model: MultimodalModel,
                          history_list: Tuple[str, str],
                         ) -> str:
     previous_dialogue, last_answer = history_list
-    # if len(previous_dialogue) == 0:
-    #     if len(last_answer) > 0:
-    #         err_msg = (f'The dialogue history {previous_dialogue} is empty, '
-    #                    f'but the model\'s last answer {last_answer} is non empty. It is impossible!')
-    #         conversation_logger.error(err_msg)
-    #         raise ValueError(err_msg)
-    #     new_prompt = runtime_config.initial_promt
-    # else:
-    #     if len(last_answer) > 0:
-    #         new_prompt = previous_dialogue + ' ' + last_answer + '</s> [INST]'
-    #     else:
-    #         if previous_dialogue.endswith('[/INST]'):
-    #             new_prompt = previous_dialogue[:-7].strip()
-    #         else:
-    #             new_prompt = previous_dialogue
-    # input_text_concated = " ".join(text_list)
+
+    concated_input = " ".join(text_list)
+
+    images_len = len(image_list)
+    empty_list = [None] * images_len
+    
     # del text_list
-    image_captions = [generate_image_caption(cur, model) for cur in image_list]
+    image_captions = empty_list
+    if startup_config.load_blit and runtime_config.use_blit:
+        image_captions = [generate_image_caption(cur, model) for cur in image_list]
 
-    yolo_images, yolo_captions, yolo_probs = detect_and_crop_objects(image_list, model)
-    if runtime_config.yolo_use_blip_caption:
-        yolo_captions = [[generate_image_caption(crop, model) for crop in cropped_image_list] for cropped_image_list in yolo_images]
+    yolo_images, yolo_captions, yolo_probs = empty_list, empty_list, empty_list
+    if startup_config.load_yolo and runtime_config.use_yolo:
+        yolo_images, yolo_captions, yolo_probs = detect_and_crop_objects(image_list, model)
+        if runtime_config.yolo_use_blip_caption:
+            yolo_captions = [[generate_image_caption(crop, model) for crop in cropped_image_list] for cropped_image_list in yolo_images]
 
-    ocr_texts = None
+    ocr_texts = empty_list
+    if startup_config.load_ocr and runtime_config.use_ocr:
+        ocr_texts = [extract_text_with_trocr(cur) for cur in image_list]
 
+    wiki_texts = empty_list
+    yolo_wiki_texts = empty_list
+    if startup_config.load_one_peace and runtime_config.use_one_peace:
+        if runtime_config.yolo_include_one_peace:
+            yolo_wiki_texts: List[List[str]] = [[yolo_get_wiki_text(caption, crop, model) for crop, caption in zip(cropped_image_list, captions)] for cropped_image_list, captions in zip(yolo_images, yolo_captions)]
+        wiki_texts = [get_wiki_texts(model, concated_input, image, caption, ocr, yolo_captions, yolo_images) for image, caption, ocr, yolo_captions, yolo_images in zip(image_list, image_captions, ocr_texts, yolo_captions, yolo_images)]
+        
+    audio_descriptions = [find_text_by_audio(concated_input, cur, model) for cur in audio_list]
 
-    image_descriptions = [find_text_by_image(input_text_concated, cur, model) for cur in image_file_list]
-    audio_descriptions = [find_text_by_audio(input_text_concated, cur, model) for cur in audio_file_list]
-    del audio_file_list
-    if len(image_descriptions) > 0:
-        new_prompt += (' ' + generate_prompt_for_image(image_descriptions))
-    if len(audio_descriptions) > 0:
-        new_prompt += (' ' + generate_prompt_for_audio(audio_descriptions))
-    # for cur_text in text_list:
-    #     new_prompt += (' ' + cur_text)
-    new_prompt = " ".join((new_prompt, input_text_concated))
-    new_prompt += ' [/INST]'
-    return ' '.join(new_prompt.strip().split())
+    texts = [runtime_config.initial_promt]
+    for image_caption, ocr_text, wiki_text, yolo_current_captions, yolo_wiki_texts in zip(image_captions, ocr_texts, wiki_texts, yolo_captions, yolo_wiki_texts):
+        texts.append(runtime_config.image_text)
+        if image_caption is not None:
+            texts.append(runtime_config.image_caption_prefix)
+            texts.append(image_caption)
+        if wiki_text is not None:
+            texts.append(runtime_config.wiki_text_prefix)
+            texts.append(wiki_text)
+        if ocr_text is not None:
+            texts.append(runtime_config.ocr_prefix)
+            texts.append(ocr_text)
+        if yolo_wiki_texts:
+            texts.append(runtime_config.yolo_prefix)
+            for yolo_caption, yolo_wiki_text in zip(yolo_current_captions, yolo_wiki_texts):
+                texts.append(runtime_config.yolo_captions_prefix)
+                texts.append(yolo_caption)
+                texts.append(runtime_config.wiki_yolo_texts_prefix)
+                texts.append(yolo_wiki_text)
+    texts.append(runtime_config.answer_postfix)
+    texts.append(runtime_config.dialogue_prefix)
+
+    return ""
 
 # Function that generates the responses for dialodues queries w.r.t. history.
 @torch.no_grad()
@@ -249,7 +241,7 @@ def generate_logits_based_on_prompt(prompt: str, image_file_list: List[str], mod
 
     images = load_images(image_file_list)
     
-    inputs = processor(text=prompt, images=images, return_tensors="pt").to(DEVICE)
+    inputs = processor(text=prompt, images=images, return_tensors="pt").to(startup_config.DEVICE)
 
     with torch.no_grad():
         logits = model(**inputs, return_dict=True).logits
