@@ -11,7 +11,6 @@ from datasets import load_dataset, concatenate_datasets
 from argparse import ArgumentParser
 
 from MMMU.mmmu.utils.data_utils import load_yaml, construct_prompt, save_json, process_single_sample, CAT_SHORT2LONG
-from MMMU.mmmu.utils.model_utils import call_llava_engine_df, llava_image_processor
 
 import team_code.generate as generate
 from io import BytesIO
@@ -47,8 +46,6 @@ def main():
 
     print('llava_initializing...')
     processor = None
-    call_model_engine = call_llava_engine_df
-    vis_process_func = llava_image_processor
 
     # load config and process to one value
     args.config = load_yaml(args.config_path)
