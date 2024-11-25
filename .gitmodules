@@ -1,0 +1,3 @@
+[submodule "MMMU"]
+	path = MMMU
+	url = https://github.com/MMMU-Benchmark/MMMU.git
