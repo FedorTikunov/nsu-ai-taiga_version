@@ -67,7 +67,7 @@ async def on_message(message: Message):
     photos = {}
     if message.photo:
         for photo in message.photo:
-            if photo.file_unique_id not in photos or photo.file_size > photos[photo.file_unique_id][1]:
+            if photo.file_unique_id not in photos or photo.file_size < photos[photo.file_unique_id][1]:
                 photos[photo.file_unique_id] = (photo.file_id, photo.file_size)
     
     for file_unique_id, (file_id, _) in photos.items():
