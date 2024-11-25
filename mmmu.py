@@ -56,7 +56,7 @@ def call_model_engine(args, sample, model, tokenizer, processor=None):
 
 
 def vis_process_func(image):
-    return BytesIO(base64.b64decode(image))
+    return image
 
 def main():
     parser = ArgumentParser()
