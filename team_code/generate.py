@@ -135,7 +135,7 @@ def generate_full_prompt(model: MultimodalModel,
     yolo_images, yolo_captions, yolo_probs = empty_list, empty_list, empty_list
     if startup_config.load_yolo and runtime_config.use_yolo:
         yolo_images, yolo_captions, yolo_probs = detect_and_crop_objects(image_list, model)
-        if runtime_config.yolo_use_blip_caption:
+        if startup_config.load_blit and runtime_config.yolo_use_blip_caption:
             yolo_captions = [[generate_image_caption(crop, model) for crop in cropped_image_list] for cropped_image_list in yolo_images]
 
     ocr_texts = empty_list
