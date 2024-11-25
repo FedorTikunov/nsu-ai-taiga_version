@@ -1,4 +1,3 @@
-from MMMU.mmmu.run_llava import run_model, set_seed
 import torch
 import os
 import random
@@ -11,11 +10,40 @@ from datasets import load_dataset, concatenate_datasets
 from argparse import ArgumentParser
 
 from MMMU.mmmu.utils.data_utils import load_yaml, construct_prompt, save_json, process_single_sample, CAT_SHORT2LONG
+from MMMU.mmmu.utils.eval_utils import parse_multi_choice_response, parse_open_response
 
 import team_code.generate as generate
 from io import BytesIO
 import base64
 
+
+def run_model(args, samples, model, call_model_engine_fn=None, tokenizer=None, processor=None):
+    out_samples = dict()
+    with torch.no_grad():
+        for sample in tqdm(samples):
+            response = call_model_engine_fn(args, sample, model, tokenizer, processor)
+
+            if sample['question_type'] == 'multiple-choice':
+                pred_ans = parse_multi_choice_response(response, sample['all_choices'], sample['index2ans'])
+            else:  # open question
+                pred_ans = response
+            out_samples[sample['id']] = pred_ans
+    return out_samples
+
+def set_seed(seed_value):
+    """
+    Set the seed for PyTorch (both CPU and CUDA), Python, and NumPy for reproducible results.
+
+    :param seed_value: An integer value to be used as the seed.
+    """
+    torch.manual_seed(seed_value)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed(seed_value)
+        torch.cuda.manual_seed_all(seed_value)  # For multi-GPU setups
+    random.seed(seed_value)
+    np.random.seed(seed_value)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
 
 def call_model_engine(args, sample, model, tokenizer, processor=None):
     cur_query_list = []
