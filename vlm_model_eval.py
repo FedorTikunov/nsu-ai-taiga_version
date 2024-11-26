@@ -12,20 +12,6 @@ from vlmeval.utils.result_transfer import MMMU_result_transfer, MMTBench_result_
 from VLMEvalKitClass import OnlyFansModel
 
 
-def build_model_from_config(cfg):
-    import vlmeval.api
-    import vlmeval.vlm
-    config = cp.deepcopy(cfg)
-    assert 'class' in config
-    cls_name = config.pop('class')
-    if hasattr(vlmeval.api, cls_name):
-        return getattr(vlmeval.api, cls_name)(**config)
-    elif hasattr(vlmeval.vlm, cls_name):
-        return getattr(vlmeval.vlm, cls_name)(**config)
-    else:
-        raise ValueError(f'Class {cls_name} is not supported in `vlmeval.api` or `vlmeval.vlm`')
-
-
 def build_dataset_from_config(cfg):
     import vlmeval.dataset
     config = cp.deepcopy(cfg)
@@ -181,10 +167,6 @@ def main():
         if not osp.exists(pred_root):
             os.makedirs(pred_root, exist_ok=True)
 
-        # if use_config:
-            # model = build_model_from_config(cfg['model'][model_name])
-        model = OnlyFansModel()
-
         for _, dataset_name in enumerate(args.data):
             try:
                 result_file_base = f'{model_name}_{dataset_name}.xlsx'
@@ -280,8 +262,9 @@ def main():
                 if world_size > 1:
                     dist.barrier()
 
-                if model is None:
-                    model = model_name  # which is only a name
+                model = OnlyFansModel()
+                # if model is None:
+                #     model = model_name  # which is only a name
 
                 # Perform the Inference
                 if dataset.MODALITY == 'VIDEO':
