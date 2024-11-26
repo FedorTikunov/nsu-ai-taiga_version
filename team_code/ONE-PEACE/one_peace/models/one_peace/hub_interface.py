@@ -11,6 +11,7 @@ import torch.nn.functional as F
 from torchvision import transforms
 from torchvision.transforms import InterpolationMode
 from fairseq import checkpoint_utils, utils
+from pathlib import Path
 
 from ...data.base_dataset import CLIP_DEFAULT_MEAN, CLIP_DEFAULT_STD
 from ...utils.data_utils import collate_tokens
@@ -22,6 +23,14 @@ _MODELS = {
     "ONE-PEACE": "http://one-peace-shanghai.oss-accelerate.aliyuncs.com/one-peace.pt",
     "ONE-PEACE_Grounding": "https://one-peace-shanghai.oss-accelerate.aliyuncs.com/one_peace_checkpoints/finetune_refcocog.pt"
 }
+
+
+def Image_open(path_or_img) -> Image.Image:
+    if isinstance(path_or_img, (str, Path)):
+        return Image.open(path_or_img)
+    else:
+        return path_or_img
+
 
 def _download(url: str, root: str):
     os.makedirs(root, exist_ok=True)
@@ -150,7 +159,7 @@ class OnePeaceHubInterface:
         image_width_list = []
         image_height_list = []
         for image_path in image_list:
-            image = Image.open(image_path).convert("RGB")
+            image = Image_open(image_path).convert("RGB")
             w, h = image.size
             patch_image = self.transform(image)
             patch_images_list.append(patch_image)

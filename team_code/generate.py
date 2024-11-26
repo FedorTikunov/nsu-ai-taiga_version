@@ -35,9 +35,17 @@ from torchvision.transforms import InterpolationMode
 from ultralytics import YOLO
 from PIL.ImageFile import ImageFile
 from ultralytics.engine.results import Results
+from pathlib import Path
 DEVICE = torch.device("cuda:0")
 # DEVICE = torch.device("cpu")
 TARGET_SAMPLING_FREQUENCY = 16_000
+
+
+def Image_open(path_or_img) -> Image.Image:
+    if isinstance(path_or_img, (str, Path)):
+        return Image.open(path_or_img)
+    else:
+        return path_or_img
 
 
 @dataclass
@@ -76,7 +84,7 @@ ORDINAL_TENS = {'20': 'twentieth', '30': 'thirtieth', '40': 'fortieth', '50': 'f
 
 
 def generate_image_caption(image_fname: str, model: MultimodalModel) -> str:
-    raw_image = Image.open(image_fname).convert('RGB')
+    raw_image = Image_open(image_fname).convert('RGB')
     if DEVICE.type == "cpu":
         inputs = model.image[0](raw_image, return_tensors="pt").to(DEVICE)
     else:    
@@ -196,7 +204,7 @@ def find_long_text_similar_to_short_text(short_text: str, long_texts: List[str],
 
 def extract_text_with_trocr(image_fname: str, model: MultimodalModel) -> str:
     # Load the image
-    image = Image.open(image_fname)
+    image = Image_open(image_fname)
 
     image = image.convert("RGB")
     
@@ -374,7 +382,7 @@ def process_image(image_fname: str) -> torch.Tensor:
         return None  # Return None if the image file does not exist
     
     # Open the image file
-    with Image.open(image_fname) as img:
+    with Image_open(image_fname) as img:
         # Define the transformations: resize and tensor conversion
         transform = transforms.Compose([
             transforms.Resize((672, 672)),  # Resize to the size expected by LLaVA-NeXT
@@ -390,7 +398,7 @@ def detect_and_crop_objects(image_fname: str, model: MultimodalModel):
     cropped_images = []
 
     # Load image
-    image = Image.open(image_fname)
+    image = Image_open(image_fname)
 
     # Preprocess image for YOLOv8
     # inputs = model.yolo.processor(images=image, return_tensors="pt", size=416)
@@ -458,7 +466,7 @@ def load_images(image_file_list: List[str]):
     
     if not image_file_list:
         return None
-    return [np.array(Image.open(file).convert("RGB")) for file in image_file_list]
+    return [np.array(Image_open(file).convert("RGB")) for file in image_file_list]
 
 def tokenize_prompt(prompt: str, tokenizer: AutoTokenizer, add_eos_token: bool = True,
                     add_labels: bool=True) -> Dict[str, Tuple[List[int], List[torch.Tensor]]]:
