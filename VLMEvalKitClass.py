@@ -18,8 +18,8 @@ class OnlyFansModel:
         pass
 
     @torch.no_grad()
-    def generate(self, msgs: List[OneMsg], dataset=None):
-        return self.generate_inner(msgs, dataset)
+    def generate(self, message: List[OneMsg], dataset=None):
+        return self.generate_inner(message, dataset)
 
     @torch.no_grad()
     def batch_generate(self, image_list, question_list, max_new_tokens=1282):
