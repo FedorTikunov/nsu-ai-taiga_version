@@ -13,6 +13,9 @@ class OnlyFansModel:
 
     def __init__(self):
         self.model, self.tokenizer = generate.setup_model_and_tokenizer()
+    
+    def set_dump_image(self, image):
+        pass
 
     @torch.no_grad()
     def generate(self, image, question, max_new_tokens=64):
