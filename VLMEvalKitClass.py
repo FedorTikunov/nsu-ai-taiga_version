@@ -18,14 +18,8 @@ class OnlyFansModel:
         pass
 
     @torch.no_grad()
-    def generate(self, image, question, max_new_tokens=64):
-        if isinstance(image, Path):
-            image = str(image.absolute())
-        assert isinstance(image, str) 
-        with torch.cuda.amp.autocast():
-            cur_query_list = [{'type': 'image', 'content': image}, {'type': 'text', 'content': question}]
-            response, history = generate.generate_text(self.model, self.tokenizer, cur_query_list=cur_query_list, history_list=("", ""))
-        return response
+    def generate(self, msgs: List[OneMsg], dataset=None):
+        return self.generate_inner(msgs, dataset)
 
     @torch.no_grad()
     def batch_generate(self, image_list, question_list, max_new_tokens=1282):
@@ -33,9 +27,10 @@ class OnlyFansModel:
         return output
     
     def generate_inner(self, msgs: List[OneMsg], dataset=None):
+        print(msgs)
         for msg in msgs:
             msg["content"] = msg["value"]
             del msg["value"]
-        with torch.cuda.amp.autocast():
+        with torch.amp.autocast("cuda"):
             response, history = generate.generate_text(self.model, self.tokenizer, cur_query_list=msgs, history_list=("", ""))
         return response
