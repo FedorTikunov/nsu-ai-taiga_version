@@ -137,14 +137,14 @@ def main():
     if 'MMEVAL_ROOT' in os.environ:
         args.work_dir = os.environ['MMEVAL_ROOT']
 
-    if not use_config:
-        for k, v in supported_VLM.items():
-            if hasattr(v, 'keywords') and 'retry' in v.keywords and args.retry is not None:
-                v.keywords['retry'] = args.retry
-                supported_VLM[k] = v
-            if hasattr(v, 'keywords') and 'verbose' in v.keywords and args.verbose is not None:
-                v.keywords['verbose'] = args.verbose
-                supported_VLM[k] = v
+    # if not use_config:
+    #     for k, v in supported_VLM.items():
+    #         if hasattr(v, 'keywords') and 'retry' in v.keywords and args.retry is not None:
+    #             v.keywords['retry'] = args.retry
+    #             supported_VLM[k] = v
+    #         if hasattr(v, 'keywords') and 'verbose' in v.keywords and args.verbose is not None:
+    #             v.keywords['verbose'] = args.verbose
+    #             supported_VLM[k] = v
 
     if world_size > 1:
         local_rank = os.environ.get('LOCAL_RANK', 0)
@@ -265,6 +265,8 @@ def main():
                 model = OnlyFansModel()
                 # if model is None:
                 #     model = model_name  # which is only a name
+                if args.cut is not None:
+                    dataset.data = dataset.data[::args.cut]
 
                 # Perform the Inference
                 if dataset.MODALITY == 'VIDEO':
