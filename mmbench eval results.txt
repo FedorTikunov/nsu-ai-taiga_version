@@ -28,6 +28,10 @@ C_spatial_relationship (test)	np.float64(0.06172839506172839)
 C_structuralized_imagetext_understanding (test)	np.float64(0.0891089108910891)
 
 # Full llava
+A_Overall (test)	np.float64(0.25672645739910316)
+B_AR (test)	np.float64(0.4166666666666667)
+B_CP (test)	np.float64(0.2740899357601713)
+B_FP-C (test)	np.float64(0.29959514170040485)
 B_FP-S (test)	np.float64(0.24874371859296482)
 B_LR (test)	np.float64(0.11560693641618497)
 B_RR (test)	np.float64(0.08056872037914692)
